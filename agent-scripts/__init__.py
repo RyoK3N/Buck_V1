@@ -13,7 +13,7 @@ Copyright © 2025  Buck Analytics Pvt. Ltd.  All rights reserved.
 Licensed under the Apache License 2.0 – see LICENSE file for details.
 """
 
-from .buck import StockAgent, StockAgentFactory
+from .buck import Buck, BuckFactory
 from .config import SETTINGS, LOGGER
 from .interfaces import Forecast, AnalysisResult, StockData, NewsData
 
@@ -23,8 +23,8 @@ __description__ = "AI-Powered Stock Analysis and Prediction Agent that helps you
 
 # Main exports
 __all__ = [
-    "StockAgent",
-    "StockAgentFactory", 
+    "Buck",
+    "BuckFactory", 
     "SETTINGS",
     "LOGGER",
     "Forecast",
@@ -34,7 +34,7 @@ __all__ = [
 ]
 
 # Convenience functions
-def create_agent(openai_api_key: str, indian_api_key: str = "", model: str = "gpt-4o") -> StockAgent:
+def create_agent(openai_api_key: str, indian_api_key: str = "", model: str = "gpt-4o") -> Buck:
     """Create a production-ready Stock Agent.
     
     Args:
@@ -43,9 +43,9 @@ def create_agent(openai_api_key: str, indian_api_key: str = "", model: str = "gp
         model: OpenAI model to use (default: gpt-4o)
         
     Returns:
-        Configured StockAgent instance
+        Configured Buck instance
     """
-    return StockAgentFactory.create_production_agent(
+    return BuckFactory.create_production_agent(
         openai_api_key=openai_api_key,
         indian_api_key=indian_api_key,
         model=model
