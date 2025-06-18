@@ -1,5 +1,5 @@
 """
-market_forecaster.config
+Buck_V1.config
 ────────────────────────
 Global configuration and logging utilities.
 """
