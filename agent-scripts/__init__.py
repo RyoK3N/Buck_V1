@@ -13,7 +13,7 @@ Copyright © 2025  Buck Analytics Pvt. Ltd.  All rights reserved.
 Licensed under the Apache License 2.0 – see LICENSE file for details.
 """
 
-from .stock_agent import StockAgent, StockAgentFactory
+from .buck import StockAgent, StockAgentFactory
 from .config import SETTINGS, LOGGER
 from .interfaces import Forecast, AnalysisResult, StockData, NewsData
 
