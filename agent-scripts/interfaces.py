@@ -1,5 +1,5 @@
 """
-market_forecaster.interfaces
+Buck_V1.interfaces
 ──────────────────────────────
 Abstract interfaces and protocols for the stock analysis system.
 """
