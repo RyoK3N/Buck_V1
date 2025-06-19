@@ -13,7 +13,7 @@ from typing import Dict, List, Optional, Any
 
 from .interfaces import (
     IDataProvider, IAnalyzer, IPredictor, 
-    StockData, NewsData, AnalysisResult, Forecast, AgentConfig
+    StockData, NewsData, AnalysisResult, Forecast, BuckConfig
 )
 from .data_providers import DataProviderFactory
 from .analyzers import AnalyzerFactory
