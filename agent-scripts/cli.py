@@ -128,6 +128,7 @@ async def run_single_analysis(args) -> None:
         
         if not args.no_save:
             print(f"\n💾 Results saved to output directory")
+            print(f"🔍 OpenAI input data saved to inputs directory for inspection")
         
     except Exception as e:
         print(f"❌ Error: {e}")

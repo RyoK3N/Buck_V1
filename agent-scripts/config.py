@@ -21,9 +21,12 @@ class Settings(BaseSettings):
     chat_model: str = "gpt-4.1"                 # e.g. "gpt-4o", "o4-mini"
     embed_model: str = "text-embedding-ada-002"
 
+    # --- Indian API for News -----------------------------------------------
+    indian_api_key: str = Field("sk-live-7rblZdIQfghdIsfucGOdos5iPSXsevk0zcKbtTev", env="INDIAN_API_KEY")
+
     # --- Generation controls -----------------------------------------------
     temperature: float = 0.0                   # deterministic JSON
-    max_completion_tokens: int = 220           # for o4 / gpt-4o
+    max_completion_tokens: int = 1500          # Increased from 1000 to 1500 for complete detailed reasoning
 
     # --- Domain tweaks ------------------------------------------------------
     news_items: int = 8

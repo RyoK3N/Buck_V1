@@ -71,10 +71,7 @@ asyncio.run(analyze_stock_example())
 
 ```bash
 # Analyze a single stock
-python -m agent-scripts.cli analyze BHEL.NS --start 2024-01-01 --end 2024-01-10
-
-# Batch analyze multiple stocks
-python -m agent-scripts.cli batch BHEL.NS RELIANCE.NS TCS.NS --start 2024-01-01 --end 2024-01-10
+python -m agent-scripts.cli analyze BHEL.NS --start 2025-06-18 --end 2024-06-20
 
 # Run demo
 python -m agent-scripts.cli demo --symbol BHEL.NS
