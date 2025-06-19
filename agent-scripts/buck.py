@@ -35,7 +35,7 @@ class Buck:
     
     def __init__(
         self,
-        config: Optional[AgentConfig] = None,
+        config: Optional[BuckConfig] = None,
         data_provider: Optional[IDataProvider] = None,
         analyzer: Optional[IAnalyzer] = None,
         predictor: Optional[IPredictor] = None
@@ -305,9 +305,9 @@ class Buck:
         total_confidence = sum(result['confidence'] for result in analysis_results)
         return total_confidence / len(analysis_results)
     
-    def _default_config(self) -> AgentConfig:
+    def _default_config(self) -> BuckConfig:
         """Create default configuration."""
-        return AgentConfig(
+        return BuckConfig(
             openai_api_key=SETTINGS.openai_api_key,
             chat_model=SETTINGS.chat_model,
             temperature=SETTINGS.temperature,
@@ -363,7 +363,7 @@ class BuckFactory:
     
     @staticmethod
     def create_custom_agent(
-        config: AgentConfig,
+        config: BuckConfig,
         data_provider: Optional[IDataProvider] = None,
         analyzer: Optional[IAnalyzer] = None,
         predictor: Optional[IPredictor] = None
@@ -378,7 +378,7 @@ class BuckFactory:
         model: str = "gpt-4o"
     ) -> Buck:
         """Create production-ready agent."""
-        config = AgentConfig(
+        config = BuckConfig(
             openai_api_key=openai_api_key,
             chat_model=model,
             temperature=0.1,
