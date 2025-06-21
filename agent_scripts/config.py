@@ -8,7 +8,8 @@ from __future__ import annotations
 import logging, sys
 from functools import lru_cache
 
-from dotenv import load_dotenv
+import os
+from dotenv import load_dotenv, set_key
 from pydantic import Field, ValidationError
 from pydantic_settings import BaseSettings
 
@@ -51,7 +52,17 @@ def get_settings() -> Settings:
     try:
         return Settings()
     except ValidationError as exc:
-        print("[CONFIG] Validation error:\n", exc, file=sys.stderr)
+        print(
+            "[CONFIG] Missing configuration.\n"
+            "Please set OPENAI_API_KEY and other variables via environment or .env file.\n",
+            exc,
+            file=sys.stderr,
+        )
+        print(
+            "Hint: you can call agent_scripts.config.set_api_keys('<openai>', '<indian>')"
+            " to create the .env file automatically.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
 
@@ -71,4 +82,35 @@ def get_logger() -> logging.Logger:
 SETTINGS = get_settings()
 LOGGER   = get_logger()
 
-__all__ = ["SETTINGS", "LOGGER", "get_settings", "get_logger"]
+def set_api_keys(openai_api_key: str, indian_api_key: str = "", env_file: str = ".env") -> None:
+    """Persist API keys to a .env file and refresh settings."""
+    set_key(env_file, "OPENAI_API_KEY", openai_api_key)
+    os.environ["OPENAI_API_KEY"] = openai_api_key
+    if indian_api_key:
+        set_key(env_file, "INDIAN_API_KEY", indian_api_key)
+        os.environ["INDIAN_API_KEY"] = indian_api_key
+
+    get_settings.cache_clear()
+    global SETTINGS
+    SETTINGS = get_settings()
+    LOGGER.info("API keys updated and saved to %s", env_file)
+
+
+def ensure_api_keys() -> bool:
+    """Validate that the OpenAI API key is available."""
+    if os.getenv("OPENAI_API_KEY"):
+        return True
+
+    LOGGER.error(
+        "OPENAI_API_KEY is missing. Set it via environment, a .env file, or call set_api_keys()."
+    )
+    return False
+
+__all__ = [
+    "SETTINGS",
+    "LOGGER",
+    "get_settings",
+    "get_logger",
+    "set_api_keys",
+    "ensure_api_keys",
+]

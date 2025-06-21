@@ -256,13 +256,11 @@ async def main() -> None:
     
     # Validate API key
     if not args.api_key:
-        try:
-            from .config import SETTINGS
-            if not SETTINGS.openai_api_key:
-                print("❌ Error: OpenAI API key required. Set OPENAI_API_KEY env var or use --api-key")
-                return
-        except Exception:
-            print("❌ Error: OpenAI API key required. Set OPENAI_API_KEY env var or use --api-key")
+        from .config import ensure_api_keys
+        if not ensure_api_keys():
+            print(
+                "❌ Error: OpenAI API key required. Use `set_api_keys` or set OPENAI_API_KEY env var."
+            )
             return
     
     # Route to appropriate command

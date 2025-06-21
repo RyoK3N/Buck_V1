@@ -14,10 +14,10 @@ Licensed under the Apache License 2.0 – see LICENSE file for details.
 """
 
 from .buck import Buck, BuckFactory
-from .config import SETTINGS, LOGGER
+from .config import SETTINGS, LOGGER, set_api_keys, ensure_api_keys
 from .interfaces import Forecast, AnalysisResult, StockData, NewsData
 
-__version__ = "1.4.0"
+__version__ = "1.4.1"
 __author__ = "Buck Dev Team"
 __description__ = "AI-Powered Stock Analysis and Prediction Agent that helps you make bucks"
 
@@ -31,6 +31,8 @@ __all__ = [
     "AnalysisResult",
     "StockData",
     "NewsData",
+    "set_api_keys",
+    "ensure_api_keys",
 ]
 
 # Convenience functions

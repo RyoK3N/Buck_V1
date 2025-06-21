@@ -1,7 +1,7 @@
 # Buck_V1
 An agent that helps you predict the next day's stock data.
 
-# 🤖 BUCK (Version 1.4.0) - AI-Powered Stock Analysis & Prediction
+# 🤖 BUCK (Version 1.4.1) - AI-Powered Stock Analysis & Prediction
 
 A production-ready stock analysis and prediction system that combines technical analysis, sentiment analysis, and AI-powered forecasting using OpenAI models.
 
@@ -31,6 +31,12 @@ pip install -r requirements.txt
 # Set up environment variables
 export OPENAI_API_KEY="your-openai-api-key"
 export INDIAN_API_KEY="your-indian-api-key"  # Optional for news data
+
+# Or configure keys once using Python (creates a .env file)
+python - <<'EOF'
+from agent_scripts import set_api_keys
+set_api_keys("your-openai-api-key", "your-indian-api-key")
+EOF
 ```
 
 ### Basic Usage
@@ -185,6 +191,13 @@ market_forecaster/
 
 Create a `.env` file in the project root to store these variables. The
 `.gitignore` file already excludes `.env` so your secrets remain private.
+
+You can generate this file automatically using `set_api_keys`:
+
+```python
+from agent_scripts import set_api_keys
+set_api_keys("your-openai-key", "your-indian-key")
+```
 
 ```bash
 # Required
