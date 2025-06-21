@@ -1,0 +1,10 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+
+# Environment files
+.env
+
+# Output directories
+output/
+

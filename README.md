@@ -183,6 +183,9 @@ market_forecaster/
 
 ### Environment Variables
 
+Create a `.env` file in the project root to store these variables. The
+`.gitignore` file already excludes `.env` so your secrets remain private.
+
 ```bash
 # Required
 OPENAI_API_KEY=your-openai-api-key
