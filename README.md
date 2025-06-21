@@ -23,7 +23,7 @@ A production-ready stock analysis and prediction system that combines technical 
 ```bash
 # Clone the repository
 git clone https://github.com/RyoK3N/Buck_V1
-cd agent-scripts
+cd Buck_V1
 
 # Install dependencies
 pip install -r requirements.txt
@@ -43,7 +43,7 @@ EOF
 
 ```python
 import asyncio
-from agent-scripts import create_agent
+from agent_scripts import create_agent
 
 async def analyze_stock_example():
     # Create the agent
@@ -77,13 +77,13 @@ asyncio.run(analyze_stock_example())
 
 ```bash
 # Analyze a single stock
-python -m agent-scripts.cli analyze BHEL.NS --start 2025-06-18 --end 2024-06-20
+python -m agent_scripts.cli analyze BHEL.NS --start 2025-06-18 --end 2024-06-20
 
 # Run demo
-python -m agent-scripts.cli demo --symbol BHEL.NS
+python -m agent_scripts.cli demo --symbol BHEL.NS
 
 # Use custom parameters
-python -m agent-scripts.cli analyze BHEL.NS \
+python -m agent_scripts.cli analyze BHEL.NS \
   --start 2024-01-01 \
   --end 2024-01-10 \
   --interval 30m \
@@ -98,7 +98,7 @@ python -m agent-scripts.cli analyze BHEL.NS \
 The main orchestrator class that coordinates data collection, analysis, and prediction.
 
 ```python
-from agent-scripts import BuckFactory
+from agent_scripts import BuckFactory
 
 # Create with default settings
 agent = BuckFactory.create_default_agent()
@@ -216,8 +216,8 @@ OUTPUT_DIR=output
 ### Custom Configuration
 
 ```python
-from agent-scripts.interfaces import BuckConfig
-from agent-scripts import BuckFactory
+from agent_scripts.interfaces import BuckConfig
+from agent_scripts import BuckFactory
 
 config = BuckConfig(
     openai_api_key="your-key",
