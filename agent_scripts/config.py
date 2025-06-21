@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     embed_model: str = "text-embedding-ada-002"
 
     # --- Indian API for News -----------------------------------------------
-    indian_api_key: str = Field("sk-live-7rblZdIQfghdIsfucGOdos5iPSXsevk0zcKbtTev", env="INDIAN_API_KEY")
+    indian_api_key: str = Field("", env="INDIAN_API_KEY")
 
     # --- Generation controls -----------------------------------------------
     temperature: float = 0.0                   # deterministic JSON
@@ -30,6 +30,9 @@ class Settings(BaseSettings):
 
     # --- Domain tweaks ------------------------------------------------------
     news_items: int = 8
+
+    # --- Output -------------------------------------------------------------
+    output_dir: str = Field("output", env="OUTPUT_DIR")
 
     # --- Logging ------------------------------------------------------------
     log_level: str = "INFO"

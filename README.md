@@ -1,7 +1,7 @@
 # Buck_V1
 An agent that helps you predict the next day's stock data.
 
-# 🤖 BUCK (Version 1.0.0) - AI-Powered Stock Analysis & Prediction
+# 🤖 BUCK (Version 1.4.0) - AI-Powered Stock Analysis & Prediction
 
 A production-ready stock analysis and prediction system that combines technical analysis, sentiment analysis, and AI-powered forecasting using OpenAI models.
 
@@ -183,6 +183,9 @@ market_forecaster/
 
 ### Environment Variables
 
+Create a `.env` file in the project root to store these variables. The
+`.gitignore` file already excludes `.env` so your secrets remain private.
+
 ```bash
 # Required
 OPENAI_API_KEY=your-openai-api-key
@@ -194,6 +197,7 @@ TEMPERATURE=0.1
 MAX_COMPLETION_TOKENS=500
 NEWS_ITEMS=10
 LOG_LEVEL=INFO
+OUTPUT_DIR=output
 ```
 
 ### Custom Configuration

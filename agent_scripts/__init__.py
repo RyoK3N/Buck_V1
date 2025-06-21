@@ -17,7 +17,7 @@ from .buck import Buck, BuckFactory
 from .config import SETTINGS, LOGGER
 from .interfaces import Forecast, AnalysisResult, StockData, NewsData
 
-__version__ = "1.0.0"
+__version__ = "1.4.0"
 __author__ = "Buck Dev Team"
 __description__ = "AI-Powered Stock Analysis and Prediction Agent that helps you make bucks"
 
