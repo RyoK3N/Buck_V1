@@ -1,0 +1,14 @@
+pandas
+numpy
+requests
+aiohttp
+yfinance
+beautifulsoup4
+openai
+python-dotenv
+nest_asyncio
+pydantic
+pydantic-settings
+scipy
+pytest
+pytest-asyncio
