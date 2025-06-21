@@ -13,7 +13,6 @@ from typing import Optional, Dict, Any, List
 
 import aiohttp
 import pandas as pd
-import requests
 import yfinance as yf
 
 from .interfaces import IDataProvider, StockData, NewsData
