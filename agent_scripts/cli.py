@@ -68,6 +68,7 @@ Examples:
     parser.add_argument('--api-key', help='OpenAI API key (or set OPENAI_API_KEY env var)')
     parser.add_argument('--indian-api-key', help='Indian API key for news data')
     parser.add_argument('--verbose', '-v', action='store_true', help='Verbose logging')
+    parser.add_argument('--version', action='store_true', help='Show version and exit')
     
     return parser
 
@@ -188,7 +189,8 @@ async def run_batch_analysis(args) -> None:
         if args.output:
             output_dir = Path(args.output)
         else:
-            output_dir = Path('output')
+            from .config import SETTINGS
+            output_dir = Path(SETTINGS.output_dir)
             
         output_dir.mkdir(exist_ok=True)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -237,6 +239,11 @@ async def main() -> None:
     """Main CLI entry point."""
     parser = setup_cli()
     args = parser.parse_args()
+
+    if getattr(args, 'version', False):
+        from . import __version__
+        print(__version__)
+        return
     
     if not args.command:
         parser.print_help()

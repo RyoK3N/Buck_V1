@@ -82,10 +82,20 @@ class YahooFinanceProvider(IDataProvider):
     def _download_sync(self, symbol: str, start: str, end: str, interval: str) -> pd.DataFrame:
         """Synchronous download wrapper."""
         start_time = time.time()
-        data = yf.download(symbol, start=start, end=end, interval=interval)
-        elapsed = time.time() - start_time
-        LOGGER.info(f"Downloaded {len(data)} rows for {symbol} in {elapsed:.2f}s")
-        return data
+        attempts = 3
+        for i in range(attempts):
+            try:
+                data = yf.download(symbol, start=start, end=end, interval=interval)
+                elapsed = time.time() - start_time
+                LOGGER.info(
+                    f"Downloaded {len(data)} rows for {symbol} in {elapsed:.2f}s on attempt {i+1}"
+                )
+                if not data.empty:
+                    return data
+            except Exception as e:
+                LOGGER.error(f"Download attempt {i+1} failed for {symbol}: {e}")
+            time.sleep(1)
+        return pd.DataFrame()
     
     async def get_news_data(self, symbol: str) -> Optional[NewsData]:
         """Yahoo Finance doesn't provide news API, return None."""
