@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import pandas as pd
 
 from data_provider_viz import DataVisualizationDownloader, fix_imports
@@ -26,19 +27,31 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+DESCRIPTION = """
+MACD (Moving Average Convergence Divergence) highlights momentum shifts.
+The MACD line crossing above the signal line may indicate bullishness and
+vice versa. Hover to inspect exact values.
+"""
+
+
 def plot(df: pd.DataFrame, symbol: str) -> None:
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10,7), sharex=True)
-    ax1.plot(df.index, df['Close'], label='Close')
-    ax1.set_title(f'{symbol} Price')
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.02)
 
-    ax2.plot(df.index, df['MACD'], label='MACD')
-    ax2.plot(df.index, df['Signal'], label='Signal')
-    ax2.axhline(0, color='black', linewidth=0.5)
-    ax2.set_title('MACD')
-    ax2.legend()
+    fig.add_trace(go.Scatter(x=df.index, y=df['Close'], name='Close'), row=1, col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], name='MACD'), row=2, col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=df['Signal'], name='Signal'), row=2, col=1)
+    fig.add_hline(y=0, line_dash='dash', row=2, col=1)
 
-    plt.tight_layout()
-    plt.show()
+    fig.update_layout(
+        title=f'{symbol} Price and MACD',
+        xaxis_title='Date',
+        yaxis_title='Price',
+        yaxis2_title='MACD',
+        hovermode='x unified'
+    )
+
+    fig.show()
+    print(DESCRIPTION)
 
 
 async def main() -> None:

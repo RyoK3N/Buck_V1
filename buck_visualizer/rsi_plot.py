@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import pandas as pd
 
 from data_provider_viz import DataVisualizationDownloader, fix_imports
@@ -29,19 +30,30 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+DESCRIPTION = """
+Relative Strength Index identifies overbought (above 70) and oversold (below 30)
+zones. Values crossing those lines can signal potential reversals. Hover for
+exact readings.
+"""
+
+
 def plot(df: pd.DataFrame, symbol: str) -> None:
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10,7), sharex=True)
-    ax1.plot(df.index, df['Close'], label='Close')
-    ax1.set_title(f'{symbol} Price')
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.02)
+    fig.add_trace(go.Scatter(x=df.index, y=df['Close'], name='Close'), row=1, col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], name='RSI'), row=2, col=1)
+    fig.add_hline(y=70, line_dash='dash', line_color='red', row=2, col=1)
+    fig.add_hline(y=30, line_dash='dash', line_color='green', row=2, col=1)
 
-    ax2.plot(df.index, df['RSI'], label='RSI')
-    ax2.axhline(70, color='r', linestyle='--')
-    ax2.axhline(30, color='g', linestyle='--')
-    ax2.set_title('Relative Strength Index')
-    ax2.legend()
+    fig.update_layout(
+        title=f'{symbol} Price and RSI',
+        xaxis_title='Date',
+        yaxis_title='Price',
+        yaxis2_title='RSI',
+        hovermode='x unified'
+    )
 
-    plt.tight_layout()
-    plt.show()
+    fig.show()
+    print(DESCRIPTION)
 
 
 async def main() -> None:

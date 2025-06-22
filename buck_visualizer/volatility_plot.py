@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 import pandas as pd
 
 from data_provider_viz import DataVisualizationDownloader, fix_imports
@@ -24,14 +24,24 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+DESCRIPTION = """
+Volatility measures the magnitude of price swings. This plot shows the
+annualized standard deviation of daily returns over the last 30 days.
+Rising volatility often signals uncertainty. Hover for precise values.
+"""
+
+
 def plot(df: pd.DataFrame, symbol: str) -> None:
-    fig, ax = plt.subplots(figsize=(10,6))
-    ax.plot(df.index, df['Volatility'], label='30D Volatility')
-    ax.set_title(f'{symbol} Rolling Volatility')
-    ax.set_ylabel('Volatility (annualized)')
-    ax.set_xlabel('Date')
-    plt.tight_layout()
-    plt.show()
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=df.index, y=df['Volatility'], name='30D Volatility'))
+    fig.update_layout(
+        title=f'{symbol} Rolling Volatility',
+        xaxis_title='Date',
+        yaxis_title='Volatility (annualized)',
+        hovermode='x unified'
+    )
+    fig.show()
+    print(DESCRIPTION)
 
 
 async def main() -> None:

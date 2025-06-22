@@ -13,3 +13,4 @@ scipy
 pytest
 pytest-asyncio
 matplotlib
+plotly

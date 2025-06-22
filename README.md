@@ -294,7 +294,7 @@ export CHAT_MODEL="gpt-4o"
 ```
 ## 📊 Visualization Scripts
 
-The `buck_visualizer` folder contains helper scripts for plotting stock and news data. Each script downloads fresh data using `data_provider_viz.py`. Example:
+The `buck_visualizer` folder contains helper scripts for **interactive** Plotly charts. Each script downloads fresh data via `data_provider_viz.py` and then displays an interactive figure with helpful explanations. Example:
 
 ```bash
 python buck_visualizer/price_ma_plot.py BHEL.NS 2024-01-01 2024-01-31
@@ -309,6 +309,12 @@ Available scripts:
 - volatility_plot.py
 - returns_histogram.py
 - news_overlay_plot.py
+
+These scripts require the optional `plotly` dependency. Install it via:
+
+```bash
+pip install -r requirements.txt
+```
 
 
 ## 🤝 Contributing

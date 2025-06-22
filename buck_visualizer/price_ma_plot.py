@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 import pandas as pd
 
 from data_provider_viz import DataVisualizationDownloader, fix_imports
@@ -26,17 +26,26 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+DESCRIPTION = """
+Interactive price chart with 20- and 50-period moving averages. The moving
+averages help reveal trend direction. Crossovers may hint at shifts in
+momentum. Hover to inspect exact prices.
+"""
+
+
 def plot(df: pd.DataFrame, symbol: str) -> None:
-    plt.figure(figsize=(10, 6))
-    plt.plot(df.index, df['Close'], label='Close')
-    plt.plot(df.index, df['MA20'], label='MA20')
-    plt.plot(df.index, df['MA50'], label='MA50')
-    plt.title(f'{symbol} Price with Moving Averages')
-    plt.xlabel('Date')
-    plt.ylabel('Price')
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=df.index, y=df["Close"], mode="lines", name="Close"))
+    fig.add_trace(go.Scatter(x=df.index, y=df["MA20"], mode="lines", name="MA20"))
+    fig.add_trace(go.Scatter(x=df.index, y=df["MA50"], mode="lines", name="MA50"))
+    fig.update_layout(
+        title=f"{symbol} Price with Moving Averages",
+        xaxis_title="Date",
+        yaxis_title="Price",
+        hovermode="x unified",
+    )
+    fig.show()
+    print(DESCRIPTION)
 
 
 async def main() -> None:

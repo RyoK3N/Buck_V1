@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import pandas as pd
 
 from data_provider_viz import DataVisualizationDownloader, fix_imports
@@ -22,24 +23,39 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+DESCRIPTION = """
+Interactive candlestick chart with volume. Candles illustrate open, high,
+low, and close prices, while the bar chart indicates trading volume.
+Zoom and hover for details. Large volume on big moves can validate trend
+strength.
+"""
+
+
 def plot(df: pd.DataFrame, symbol: str) -> None:
-    fig, ax1 = plt.subplots(figsize=(10,6))
-    width = 0.6
-    up = df['Close'] >= df['Open']
-    down = ~up
-    ax1.bar(df.index[up], df['Close'][up]-df['Open'][up], width, bottom=df['Open'][up], color='g')
-    ax1.bar(df.index[down], df['Open'][down]-df['Close'][down], width, bottom=df['Close'][down], color='r')
-    ax1.vlines(df.index, df['Low'], df['High'], color='k', linewidth=0.5)
-    ax1.set_title(f'{symbol} Candlestick')
-    ax1.set_ylabel('Price')
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                        vertical_spacing=0.02, row_heights=[0.7, 0.3])
 
-    ax2 = ax1.twinx()
-    ax2.bar(df.index, df['Volume'], width, alpha=0.3, color='b')
-    ax2.set_ylabel('Volume')
+    fig.add_trace(go.Candlestick(
+        x=df.index,
+        open=df['Open'],
+        high=df['High'],
+        low=df['Low'],
+        close=df['Close'],
+        name='Price'
+    ), row=1, col=1)
 
-    fig.autofmt_xdate()
-    plt.tight_layout()
-    plt.show()
+    fig.add_trace(go.Bar(x=df.index, y=df['Volume'], name='Volume'), row=2, col=1)
+
+    fig.update_layout(
+        title=f'{symbol} Candlestick with Volume',
+        xaxis_title='Date',
+        yaxis_title='Price',
+        yaxis2_title='Volume',
+        hovermode='x unified'
+    )
+
+    fig.show()
+    print(DESCRIPTION)
 
 
 async def main() -> None:

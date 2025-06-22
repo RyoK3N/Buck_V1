@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import matplotlib.pyplot as plt
+import plotly.express as px
 import pandas as pd
 
 from data_provider_viz import DataVisualizationDownloader, fix_imports
@@ -23,14 +23,17 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+DESCRIPTION = """
+Histogram of daily percentage returns. The distribution's shape highlights
+volatility and skewness. Use the interactive view to inspect tail events.
+"""
+
+
 def plot(df: pd.DataFrame, symbol: str) -> None:
-    plt.figure(figsize=(8,5))
-    df['Returns'].hist(bins=50)
-    plt.title(f'{symbol} Daily Returns Distribution')
-    plt.xlabel('Return')
-    plt.ylabel('Frequency')
-    plt.tight_layout()
-    plt.show()
+    fig = px.histogram(df, x='Returns', nbins=50, title=f'{symbol} Daily Returns Distribution')
+    fig.update_layout(xaxis_title='Return', yaxis_title='Frequency')
+    fig.show()
+    print(DESCRIPTION)
 
 
 async def main() -> None:

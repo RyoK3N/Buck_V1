@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from datetime import datetime
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 import pandas as pd
 
 from data_provider_viz import DataVisualizationDownloader, fix_imports
@@ -30,16 +30,28 @@ def preprocess(stock: pd.DataFrame, news: pd.DataFrame) -> tuple[pd.DataFrame, p
     return stock, times
 
 
+DESCRIPTION = """
+Vertical lines mark when news articles were published relative to price.
+Clusters of news around major moves may highlight cause and effect. Hover on
+the price line to view specific values.
+"""
+
+
 def plot(stock: pd.DataFrame, news_times: pd.Series, symbol: str) -> None:
-    plt.figure(figsize=(10,6))
-    plt.plot(stock.index, stock['Close'], label='Close')
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=stock.index, y=stock['Close'], name='Close'))
     for t in news_times:
-        plt.axvline(t, color='r', linestyle='--', alpha=0.4)
-    plt.title(f'{symbol} Price with News Releases')
-    plt.xlabel('Date')
-    plt.ylabel('Price')
-    plt.tight_layout()
-    plt.show()
+        fig.add_vline(x=t, line_dash='dash', line_color='red', opacity=0.4)
+
+    fig.update_layout(
+        title=f'{symbol} Price with News Releases',
+        xaxis_title='Date',
+        yaxis_title='Price',
+        hovermode='x unified'
+    )
+
+    fig.show()
+    print(DESCRIPTION)
 
 
 async def main() -> None:
