@@ -12,3 +12,4 @@ pydantic-settings
 scipy
 pytest
 pytest-asyncio
+matplotlib

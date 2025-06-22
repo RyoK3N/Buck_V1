@@ -292,6 +292,24 @@ export INDIAN_API_KEY="prod-indian-key"
 export LOG_LEVEL="INFO"
 export CHAT_MODEL="gpt-4o"
 ```
+## 📊 Visualization Scripts
+
+The `buck_visualizer` folder contains helper scripts for plotting stock and news data. Each script downloads fresh data using `data_provider_viz.py`. Example:
+
+```bash
+python buck_visualizer/price_ma_plot.py BHEL.NS 2024-01-01 2024-01-31
+```
+
+Available scripts:
+- price_ma_plot.py
+- candlestick_volume_plot.py
+- macd_plot.py
+- bollinger_plot.py
+- rsi_plot.py
+- volatility_plot.py
+- returns_histogram.py
+- news_overlay_plot.py
+
 
 ## 🤝 Contributing
 

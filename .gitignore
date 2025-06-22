@@ -8,3 +8,4 @@ __pycache__/
 # Output directories
 output/
 
+buck_visualizer/data-viz/
