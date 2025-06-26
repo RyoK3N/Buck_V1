@@ -277,8 +277,8 @@ class Buck:
             symbol = results['symbol']
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             
-            # Create output directory
-            output_dir = Path('output')
+            # Create output directory from settings
+            output_dir = Path(SETTINGS.output_dir)
             output_dir.mkdir(exist_ok=True)
             
             # Save complete results
@@ -319,7 +319,7 @@ class Buck:
     def _create_default_data_provider(self) -> IDataProvider:
         """Create default data provider."""
         # Use Indian API key if available, otherwise empty string
-        indian_api_key = getattr(SETTINGS, 'indian_api_key', 'sk-live-7rblZdIQfghdIsfucGOdos5iPSXsevk0zcKbtTev')
+        indian_api_key = getattr(SETTINGS, 'indian_api_key', '')
         
         return DataProviderFactory.create_composite_provider(
             yahoo_timeout=30,

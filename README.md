@@ -1,7 +1,7 @@
 # Buck_V1
 An agent that helps you predict the next day's stock data.
 
-# 🤖 BUCK (Version 1.0.0) - AI-Powered Stock Analysis & Prediction
+# 🤖 BUCK (Version 1.4.1) - AI-Powered Stock Analysis & Prediction
 
 A production-ready stock analysis and prediction system that combines technical analysis, sentiment analysis, and AI-powered forecasting using OpenAI models.
 
@@ -23,7 +23,7 @@ A production-ready stock analysis and prediction system that combines technical 
 ```bash
 # Clone the repository
 git clone https://github.com/RyoK3N/Buck_V1
-cd agent-scripts
+cd Buck_V1
 
 # Install dependencies
 pip install -r requirements.txt
@@ -31,13 +31,19 @@ pip install -r requirements.txt
 # Set up environment variables
 export OPENAI_API_KEY="your-openai-api-key"
 export INDIAN_API_KEY="your-indian-api-key"  # Optional for news data
+
+# Or configure keys once using Python (creates a .env file)
+python - <<'EOF'
+from agent_scripts import set_api_keys
+set_api_keys("your-openai-api-key", "your-indian-api-key")
+EOF
 ```
 
 ### Basic Usage
 
 ```python
 import asyncio
-from agent-scripts import create_agent
+from agent_scripts import create_agent
 
 async def analyze_stock_example():
     # Create the agent
@@ -71,13 +77,13 @@ asyncio.run(analyze_stock_example())
 
 ```bash
 # Analyze a single stock
-python -m agent-scripts.cli analyze BHEL.NS --start 2025-06-18 --end 2024-06-20
+python -m agent_scripts.cli analyze BHEL.NS --start 2025-06-18 --end 2024-06-20
 
 # Run demo
-python -m agent-scripts.cli demo --symbol BHEL.NS
+python -m agent_scripts.cli demo --symbol BHEL.NS
 
 # Use custom parameters
-python -m agent-scripts.cli analyze BHEL.NS \
+python -m agent_scripts.cli analyze BHEL.NS \
   --start 2024-01-01 \
   --end 2024-01-10 \
   --interval 30m \
@@ -92,7 +98,7 @@ python -m agent-scripts.cli analyze BHEL.NS \
 The main orchestrator class that coordinates data collection, analysis, and prediction.
 
 ```python
-from agent-scripts import BuckFactory
+from agent_scripts import BuckFactory
 
 # Create with default settings
 agent = BuckFactory.create_default_agent()
@@ -183,6 +189,16 @@ market_forecaster/
 
 ### Environment Variables
 
+Create a `.env` file in the project root to store these variables. The
+`.gitignore` file already excludes `.env` so your secrets remain private.
+
+You can generate this file automatically using `set_api_keys`:
+
+```python
+from agent_scripts import set_api_keys
+set_api_keys("your-openai-key", "your-indian-key")
+```
+
 ```bash
 # Required
 OPENAI_API_KEY=your-openai-api-key
@@ -194,13 +210,14 @@ TEMPERATURE=0.1
 MAX_COMPLETION_TOKENS=500
 NEWS_ITEMS=10
 LOG_LEVEL=INFO
+OUTPUT_DIR=output
 ```
 
 ### Custom Configuration
 
 ```python
-from agent-scripts.interfaces import BuckConfig
-from agent-scripts import BuckFactory
+from agent_scripts.interfaces import BuckConfig
+from agent_scripts import BuckFactory
 
 config = BuckConfig(
     openai_api_key="your-key",
@@ -275,6 +292,30 @@ export INDIAN_API_KEY="prod-indian-key"
 export LOG_LEVEL="INFO"
 export CHAT_MODEL="gpt-4o"
 ```
+## 📊 Visualization Scripts
+
+The `buck_visualizer` folder contains helper scripts for **interactive** Plotly charts. Each script downloads fresh data via `data_provider_viz.py` and then displays an interactive figure with helpful explanations. Example:
+
+```bash
+python buck_visualizer/price_ma_plot.py BHEL.NS 2024-01-01 2024-01-31
+```
+
+Available scripts:
+- price_ma_plot.py
+- candlestick_volume_plot.py
+- macd_plot.py
+- bollinger_plot.py
+- rsi_plot.py
+- volatility_plot.py
+- returns_histogram.py
+- news_overlay_plot.py
+
+These scripts require the optional `plotly` dependency. Install it via:
+
+```bash
+pip install -r requirements.txt
+```
+
 
 ## 🤝 Contributing
 
