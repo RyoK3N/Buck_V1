@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
 
-from data_provider_viz import DataVisualizationDownloader, fix_imports
+from tools.buck_visualizer.data_provider_viz import DataVisualizationDownloader, fix_imports
 
 fix_imports()
 
@@ -20,33 +20,37 @@ async def fetch(symbol: str, start: str, end: str, interval: str) -> pd.DataFram
 
 def preprocess(df: pd.DataFrame) -> pd.DataFrame:
     df = df.sort_index()
-    exp1 = df['Close'].ewm(span=12, adjust=False).mean()
-    exp2 = df['Close'].ewm(span=26, adjust=False).mean()
-    df['MACD'] = exp1 - exp2
-    df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
     return df
 
 
 DESCRIPTION = """
-MACD (Moving Average Convergence Divergence) highlights momentum shifts.
-The MACD line crossing above the signal line may indicate bullishness and
-vice versa. Hover to inspect exact values.
+Interactive candlestick chart with volume. Candles illustrate open, high,
+low, and close prices, while the bar chart indicates trading volume.
+Zoom and hover for details. Large volume on big moves can validate trend
+strength.
 """
 
 
 def plot(df: pd.DataFrame, symbol: str) -> None:
-    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.02)
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                        vertical_spacing=0.02, row_heights=[0.7, 0.3])
 
-    fig.add_trace(go.Scatter(x=df.index, y=df['Close'], name='Close'), row=1, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], name='MACD'), row=2, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df['Signal'], name='Signal'), row=2, col=1)
-    fig.add_hline(y=0, line_dash='dash', row=2, col=1)
+    fig.add_trace(go.Candlestick(
+        x=df.index,
+        open=df['Open'],
+        high=df['High'],
+        low=df['Low'],
+        close=df['Close'],
+        name='Price'
+    ), row=1, col=1)
+
+    fig.add_trace(go.Bar(x=df.index, y=df['Volume'], name='Volume'), row=2, col=1)
 
     fig.update_layout(
-        title=f'{symbol} Price and MACD',
+        title=f'{symbol} Candlestick with Volume',
         xaxis_title='Date',
         yaxis_title='Price',
-        yaxis2_title='MACD',
+        yaxis2_title='Volume',
         hovermode='x unified'
     )
 
@@ -55,7 +59,7 @@ def plot(df: pd.DataFrame, symbol: str) -> None:
 
 
 async def main() -> None:
-    parser = argparse.ArgumentParser(description='MACD plot')
+    parser = argparse.ArgumentParser(description='Candlestick with volume plot')
     parser.add_argument('symbol')
     parser.add_argument('start_date')
     parser.add_argument('end_date')

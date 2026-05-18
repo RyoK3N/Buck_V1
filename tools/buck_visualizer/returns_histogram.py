@@ -5,7 +5,7 @@ import asyncio
 import plotly.express as px
 import pandas as pd
 
-from data_provider_viz import DataVisualizationDownloader, fix_imports
+from tools.buck_visualizer.data_provider_viz import DataVisualizationDownloader, fix_imports
 
 fix_imports()
 

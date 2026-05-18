@@ -5,7 +5,7 @@ import asyncio
 import plotly.graph_objects as go
 import pandas as pd
 
-from data_provider_viz import DataVisualizationDownloader, fix_imports
+from tools.buck_visualizer.data_provider_viz import DataVisualizationDownloader, fix_imports
 
 # Ensure we can import agent_scripts
 fix_imports()
