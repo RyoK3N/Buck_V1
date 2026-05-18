@@ -1,22 +1,22 @@
 # Buck_V1
 An agent that helps you predict the next day's stock data.
 
-# 🤖 BUCK (Version 1.4.1) - AI-Powered Stock Analysis & Prediction
+# BUCK (Version 1.4.1) - AI-Powered Stock Analysis & Prediction
 
 A production-ready stock analysis and prediction system that combines technical analysis, sentiment analysis, and AI-powered forecasting using OpenAI models.
 
-## ✨ Features
+## Features
 
-- **📊 Comprehensive Technical Analysis**: 6+ technical indicators (RSI, MACD, Moving Averages, OBV, Support/Resistance, Candlestick Patterns)
-- **📰 Sentiment Analysis**: News sentiment analysis using keyword-based scoring
-- **🤖 AI-Powered Predictions**: OpenAI GPT-4 powered next-day price forecasting
-- **⚡ Async & Concurrent**: High-performance async architecture with concurrent processing
-- **🔧 Production Ready**: FAANG-level software engineering practices with SOLID principles
-- **📈 Batch Analysis**: Analyze multiple stocks simultaneously
-- **💾 Caching & Storage**: Built-in result caching and file storage
-- **🛠️ Extensible**: Modular design with factory patterns and dependency injection
+- **Comprehensive Technical Analysis**: 6+ technical indicators (RSI, MACD, Moving Averages, OBV, Support/Resistance, Candlestick Patterns)
+- **Sentiment Analysis**: News sentiment analysis using keyword-based scoring
+- **AI-Powered Predictions**: OpenAI/OpenRouter powered next-day price forecasting
+- **Async & Concurrent**: High-performance async architecture with concurrent processing
+- **Production Ready**: FAANG-level software engineering practices with SOLID principles
+- **Batch Analysis**: Analyze multiple stocks simultaneously
+- **Caching & Storage**: Built-in result caching and file storage
+- **Extensible**: Modular design with factory patterns and dependency injection
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Installation
 
@@ -28,9 +28,13 @@ cd Buck_V1
 # Install dependencies
 pip install -r requirements.txt
 
-# Set up environment variables
+# Set up environment variables (OpenAI)
 export OPENAI_API_KEY="your-openai-api-key"
 export INDIAN_API_KEY="your-indian-api-key"  # Optional for news data
+
+# Or use OpenRouter (free models available for testing)
+export OPENAI_BASE_URL="https://openrouter.ai/api/v1"
+export OPENAI_API_KEY="your-openrouter-api-key"
 
 # Or configure keys once using Python (creates a .env file)
 python - <<'EOF'
@@ -91,7 +95,7 @@ python -m agent_scripts.cli analyze BHEL.NS \
   --api-key your-openai-key
 ```
 
-## 📖 API Documentation
+## API Documentation
 
 ### StockAgent
 
@@ -150,7 +154,7 @@ agent = BuckFactory.create_production_agent(
 }
 ```
 
-## 🔧 Architecture
+## Architecture
 
 The system follows SOLID principles with a clean, modular architecture:
 
@@ -174,7 +178,7 @@ market_forecaster/
 4. **Predictors**: Generate AI-powered forecasts using OpenAI
 5. **Stock Agent**: Main orchestrator that ties everything together
 
-## 🛠️ Technical Indicators
+## Technical Indicators
 
 | Indicator | Purpose | Signals |
 |-----------|---------|---------|
@@ -185,7 +189,7 @@ market_forecaster/
 | **Support/Resistance** | Key price levels | Buy near support, sell near resistance |
 | **Candlestick Patterns** | Reversal signals | 19 classical patterns detected |
 
-## ⚙️ Configuration
+## Configuration
 
 ### Environment Variables
 
@@ -202,6 +206,9 @@ set_api_keys("your-openai-key", "your-indian-key")
 ```bash
 # Required
 OPENAI_API_KEY=your-openai-api-key
+
+# Optional - set to use OpenRouter instead of OpenAI directly
+OPENAI_BASE_URL=https://openrouter.ai/api/v1
 
 # Optional
 INDIAN_API_KEY=your-indian-api-key
@@ -231,7 +238,7 @@ config = BuckConfig(
 agent = BuckFactory.create_custom_agent(config)
 ```
 
-## 📊 Performance Features
+## Performance Features
 
 - **Async Architecture**: Non-blocking I/O for better performance
 - **Concurrent Processing**: Analyze multiple stocks simultaneously
@@ -239,7 +246,7 @@ agent = BuckFactory.create_custom_agent(config)
 - **Error Handling**: Comprehensive error handling with graceful degradation
 - **Rate Limiting**: Built-in concurrency controls to respect API limits
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Install development dependencies
@@ -252,36 +259,36 @@ pytest tests/ -v
 pytest tests/ --cov=market_forecaster --cov-report=html
 ```
 
-## 📈 Example Output
+## Example Output
 
 ```
-🔍 Analyzing BHEL.NS from 2024-01-01 to 2024-01-10...
+Analyzing BHEL.NS from 2024-01-01 to 2024-01-10...
 
-📈 Analysis Results for BHEL.NS
+Analysis Results for BHEL.NS
 ==================================================
 Data Period: 2024-01-01 to 2024-01-10 (1h)
 Data Points: 168
 News Available: Yes
 Model Used: gpt-4o
 
-🔮 Next-Day Forecast (2024-01-11)
+Next-Day Forecast (2024-01-11)
 ------------------------------
-Open:  ₹245.30
-High:  ₹248.75
-Low:   ₹242.10
-Close: ₹247.80
+Open:  Rs245.30
+High:  Rs248.75
+Low:   Rs242.10
+Close: Rs247.80
 Confidence: 0.75
 Reasoning: Technical indicators show bullish momentum with RSI at 65, MACD positive crossover, and price above key moving averages. News sentiment is neutral with no major negative factors.
 
-📊 Confidence Scores
+Confidence Scores
 --------------------
 Analysis: 0.82
 Prediction: 0.75
 
-💾 Results saved to output directory
+Results saved to output directory
 ```
 
-## 🚀 Production Deployment
+## Production Deployment
 
 ### Environment Setup
 
@@ -292,7 +299,7 @@ export INDIAN_API_KEY="prod-indian-key"
 export LOG_LEVEL="INFO"
 export CHAT_MODEL="gpt-4o"
 ```
-## 📊 Visualization Scripts
+## Visualization Scripts
 
 The `buck_visualizer` folder contains helper scripts for **interactive** Plotly charts. Each script downloads fresh data via `data_provider_viz.py` and then displays an interactive figure with helpful explanations. Example:
 
@@ -317,7 +324,7 @@ pip install -r requirements.txt
 ```
 
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -325,11 +332,11 @@ pip install -r requirements.txt
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📄 License
+## License
 
 This project is licensed under the Apache License - see the [LICENSE](LICENSE) file for details.
 
-## 🔗 Related Links
+## Related Links
 
 - [OpenAI API Documentation](https://platform.openai.com/docs)
 - [Yahoo Finance API](https://pypi.org/project/yfinance/)
@@ -337,4 +344,4 @@ This project is licensed under the Apache License - see the [LICENSE](LICENSE) f
 
 ---
 
-** Now lets start making some Bucks 💰💰💰 ** 
+** Now lets start making some Bucks ** 

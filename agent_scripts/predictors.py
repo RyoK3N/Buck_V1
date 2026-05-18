@@ -23,8 +23,17 @@ from .config import SETTINGS, LOGGER
 class OpenAIPredictor(IPredictor):
     """OpenAI-powered stock predictor."""
     
-    def __init__(self, api_key: str, model: str = "gpt-4o", temperature: float = 0.1):
-        self.client = OpenAI(api_key=api_key)
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "gpt-4o",
+        temperature: float = 0.1,
+        base_url: Optional[str] = None
+    ):
+        client_kwargs = {"api_key": api_key}
+        if base_url:
+            client_kwargs["base_url"] = base_url
+        self.client = OpenAI(**client_kwargs)
         self.model = model
         self.temperature = temperature
         self._json_pattern = re.compile(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}')
@@ -684,10 +693,11 @@ class PredictorFactory:
     def create_openai_predictor(
         api_key: str,
         model: str = "gpt-4o",
-        temperature: float = 0.1
+        temperature: float = 0.1,
+        base_url: Optional[str] = None
     ) -> OpenAIPredictor:
         """Create OpenAI predictor."""
-        return OpenAIPredictor(api_key, model, temperature)
+        return OpenAIPredictor(api_key, model, temperature, base_url)
     
     @staticmethod
     def create_ensemble_predictor(
@@ -703,5 +713,6 @@ class PredictorFactory:
         return OpenAIPredictor(
             api_key=SETTINGS.openai_api_key,
             model=SETTINGS.chat_model,
-            temperature=SETTINGS.temperature
+            temperature=SETTINGS.temperature,
+            base_url=SETTINGS.openai_base_url or None
         ) 

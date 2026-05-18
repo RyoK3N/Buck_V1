@@ -7,6 +7,7 @@ Global configuration and logging utilities.
 from __future__ import annotations
 import logging, sys
 from functools import lru_cache
+from typing import Optional
 
 import os
 from dotenv import load_dotenv, set_key
@@ -17,9 +18,10 @@ load_dotenv()  # quietly loads .env if present
 
 
 class Settings(BaseSettings):
-    # --- OpenAI -------------------------------------------------------------
+    # --- LLM Provider -------------------------------------------------------
     openai_api_key: str = Field(..., env="OPENAI_API_KEY")
-    chat_model: str = "gpt-4.1"                 # e.g. "gpt-4o", "o4-mini"
+    openai_base_url: Optional[str] = Field(None, env="OPENAI_BASE_URL")
+    chat_model: str = "gpt-4.1"                 # e.g. "gpt-4o", "google/gemini-2.0-flash-exp:free"
     embed_model: str = "text-embedding-ada-002"
 
     # --- Indian API for News -----------------------------------------------
@@ -54,12 +56,13 @@ def get_settings() -> Settings:
     except ValidationError as exc:
         print(
             "[CONFIG] Missing configuration.\n"
-            "Please set OPENAI_API_KEY and other variables via environment or .env file.\n",
+            "Please set OPENAI_API_KEY (and optionally OPENAI_BASE_URL for OpenRouter) "
+            "via environment or .env file.\n",
             exc,
             file=sys.stderr,
         )
         print(
-            "Hint: you can call agent_scripts.config.set_api_keys('<openai>', '<indian>')"
+            "Hint: you can call agent_scripts.config.set_api_keys('<api-key>', '<indian>')"
             " to create the .env file automatically.",
             file=sys.stderr,
         )
@@ -90,6 +93,7 @@ def set_api_keys(openai_api_key: str, indian_api_key: str = "", env_file: str = 
         set_key(env_file, "INDIAN_API_KEY", indian_api_key)
         os.environ["INDIAN_API_KEY"] = indian_api_key
 
+    # Re-import to pick up any new env vars (e.g. OPENAI_BASE_URL)
     get_settings.cache_clear()
     global SETTINGS
     SETTINGS = get_settings()
@@ -97,7 +101,7 @@ def set_api_keys(openai_api_key: str, indian_api_key: str = "", env_file: str = 
 
 
 def ensure_api_keys() -> bool:
-    """Validate that the OpenAI API key is available."""
+    """Validate that the API key is available."""
     if os.getenv("OPENAI_API_KEY"):
         return True
 
