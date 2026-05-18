@@ -1,0 +1,292 @@
+================================================================================
+OPENAI INPUT DATA FOR BHEL.NS
+Generated at: 2026-05-18T18:15:50.046146
+Model: meta-llama/llama-3.2-3b-instruct:free
+Temperature: 0.0
+================================================================================
+
+SYSTEM PROMPT:
+----------------------------------------
+You are a senior quantitative analyst and portfolio manager with 15+ years of experience in equity research and algorithmic trading.
+
+Your task is to generate a precise next-day stock price forecast based on comprehensive technical and sentiment analysis.
+
+Return ONLY a valid JSON object with these exact keys:
+- "date": Next trading day in YYYY-MM-DD format
+- "open": Opening price prediction (float, 2 decimals)
+- "high": High price prediction (float, 2 decimals) 
+- "low": Low price prediction (float, 2 decimals)
+- "close": Closing price prediction (float, 2 decimals)
+- "confidence": Confidence score 0.0-1.0 (float, 2 decimals)
+- "reasoning": Detailed analysis reasoning (string, provide comprehensive rationale explaining your prediction, including specific technical indicators, sentiment factors, and risk considerations - aim for 300-500 words)
+
+Guidelines:
+1. Base predictions on technical indicators (RSI, MACD, moving averages, support/resistance)
+2. Factor in volume patterns (OBV), candlestick signals, and momentum indicators
+3. Consider sentiment analysis results, news impact, and market psychology
+4. Ensure high >= max(open, close) and low <= min(open, close)
+5. Explain your confidence level based on data quality and signal clarity
+6. Be conservative with price movements (typically 0.5-3% daily)
+7. In reasoning, specifically mention which indicators support your prediction and any conflicting signals
+
+Provide detailed reasoning that explains the logic behind your price targets and confidence score.
+
+Output only the JSON object, no additional text.
+
+USER PROMPT (ANALYSIS DATA):
+----------------------------------------
+### Market Data Context
+Analysis Period: 2025-01-01 to 2025-01-10
+Data Interval: 1h
+Data Points Available: 49
+Data Quality: Sufficient
+
+Current Market Price: ₹216.55
+
+### Technical Analysis for BHEL.NS
+Overall Signal: HOLD (Strength: 0.36)
+
+Key Indicators:
+- RSI: 26.90 (OVERSOLD)
+- MACD: -2.3055 | Signal: SELL
+- MACD Histogram: -0.1951
+- Moving Averages: Short MA: 219.00 | Long MA: nan
+- Support: None | Resistance: 226.0
+- Volume Analysis (OBV): -11069846.00 | Trend: RISING
+- Candlestick Patterns: 2 detected
+  - Bullish Score: 0.0
+  - Bearish Score: 0.9
+
+Signal Breakdown: {'BUY': 0.8033129704419811, 'SELL': 0.9846376901316058, 'HOLD': 1.0}
+Tools Processed: 6/6
+
+### Enhanced Sentiment Analysis
+News Available: False
+News Count: 0
+Overall Sentiment: NEUTRAL (Score: 0.000)
+
+Signal Distribution:
+- Positive Signals: 0
+- Negative Signals: 0
+- Neutral Signals: 0
+- High Impact News: 0
+- Weighted Sentiment Score: 0.000
+
+News Impact Analysis:
+- High Impact: 0 items
+- Medium Impact: 0 items
+- Low Impact: 0 items
+
+Topic Distribution: {}
+High Impact Topics: []
+
+Temporal Pattern:
+- Last 24h: 0 items
+- Last 48h: 0 items
+- Last Week: 0 items
+- News Freshness Score: 0.00
+
+Source Analysis:
+- Source Diversity: 0 unique sources
+- Average Credibility: 0.00
+- Credible Sources: 0
+
+Relevance Analysis:
+- Direct Company Mentions: 0
+- Sector Mentions: 0
+- Relevance Score: 0.00
+
+Confidence Factors:
+- News Volume: 0.00
+- Source Diversity: 0.00
+- Topic Relevance: 0.00
+- Temporal Freshness: 0.00
+
+
+### Analysis Quality Assessment
+Technical Analysis Quality: Medium
+Sentiment Analysis Quality: Very Low
+Overall Data Confidence: Low
+Key Limitations: Limited news coverage, Low news relevance
+Prediction Confidence Guidance: Low confidence - significant data constraints
+
+Based on this comprehensive analysis combining technical indicators, enhanced sentiment analysis with temporal patterns, source credibility, relevance scoring, and market context, please provide your next-day forecast. Pay special attention to:
+1. Technical signal consistency and strength
+2. News sentiment momentum and impact levels  
+3. Temporal patterns in news flow
+4. Source credibility and relevance scores
+5. Data quality limitations and confidence factors
+
+Your forecast should reflect the nuanced interplay between these factors.
+
+RAW ANALYSIS RESULTS:
+----------------------------------------
+[
+  {
+    "symbol": "BHEL.NS",
+    "analysis_type": "composite_analysis",
+    "data": {
+      "symbol": "BHEL.NS",
+      "analysis_results": {
+        "technical_analysis": {
+          "symbol": "BHEL.NS",
+          "analysis_type": "technical_analysis",
+          "data": {
+            "symbol": "BHEL.NS",
+            "data_info": {
+              "interval": "1h",
+              "start_date": "2025-01-01",
+              "end_date": "2025-01-10",
+              "data_points": 49
+            },
+            "tools_results": {
+              "moving_average": {
+                "short_window": 10,
+                "long_window": 50,
+                "type": "SMA",
+                "short_ma": 219.002001953125,
+                "long_ma": NaN,
+                "signal": "HOLD",
+                "strength": 0.5
+              },
+              "rsi": {
+                "rsi": 26.900610886740566,
+                "window": 14,
+                "overbought_threshold": 70,
+                "oversold_threshold": 30,
+                "signal": "BUY",
+                "condition": "OVERSOLD",
+                "strength": 0.10331297044198114
+              },
+              "macd": {
+                "macd": -2.3054623711936983,
+                "signal": "SELL",
+                "histogram": -0.1951290097831695,
+                "short_window": 12,
+                "long_window": 26,
+                "signal_window": 9,
+                "strength": 0.08463769013160584
+              },
+              "obv": {
+                "obv": -11069846.0,
+                "obv_trend": "RISING",
+                "obv_ma": -11243590.6,
+                "signal": "BUY",
+                "strength": 0.7
+              },
+              "candlestick_patterns": {
+                "patterns": {
+                  "2025-01-09 08:45:00+00:00": {
+                    "Bearish Engulfing": 0.9
+                  },
+                  "2025-01-08 06:45:00+00:00": {
+                    "Doji": 0.9
+                  }
+                },
+                "bullish_score": 0,
+                "bearish_score": 0.9,
+                "pattern_count": 2,
+                "signal": "SELL",
+                "strength": 0.9
+              },
+              "support_resistance": {
+                "levels": {
+                  "2025-01-03 06:45:00+00:00": {
+                    "type": "Support",
+                    "level": 231.25999450683594
+                  },
+                  "2025-01-03 09:45:00+00:00": {
+                    "type": "Support",
+                    "level": 229.8000030517578
+                  },
+                  "2025-01-06 05:45:00+00:00": {
+                    "type": "Support",
+                    "level": 222.69000244140625
+                  },
+                  "2025-01-06 09:45:00+00:00": {
+                    "type": "Support",
+                    "level": 219.55999755859375
+                  },
+                  "2025-01-07 06:45:00+00:00": {
+                    "type": "Support",
+                    "level": 219.22000122070312
+                  },
+                  "2025-01-07 08:45:00+00:00": {
+                    "type": "Resistance",
+                    "level": 226.0
+                  },
+                  "2025-01-08 06:45:00+00:00": {
+                    "type": "Support",
+                    "level": 218.52999877929688
+                  },
+                  "2025-01-09 07:45:00+00:00": {
+                    "type": "Support",
+                    "level": 217.00999450683594
+                  }
+                },
+                "current_price": 216.5500030517578,
+                "nearest_support": null,
+                "nearest_resistance": 226.0,
+                "support_count": 7,
+                "resistance_count": 1,
+                "signal": "HOLD",
+                "strength": 0.5
+              }
+            },
+            "summary": {
+              "overall_signal": "HOLD",
+              "signal_strength": 0.35868640508661737,
+              "signals_breakdown": {
+                "BUY": 0.8033129704419811,
+                "SELL": 0.9846376901316058,
+                "HOLD": 1.0
+              },
+              "key_metrics": {
+                "short_ma": 219.002001953125,
+                "long_ma": NaN,
+                "rsi": 26.900610886740566,
+                "rsi_condition": "OVERSOLD",
+                "macd": -2.3054623711936983,
+                "macd_signal": "SELL",
+                "macd_histogram": -0.1951290097831695,
+                "pattern_count": 2,
+                "bullish_score": 0,
+                "bearish_score": 0.9,
+                "nearest_support": null,
+                "nearest_resistance": 226.0
+              },
+              "tools_processed": 6,
+              "tools_failed": 0
+            }
+          },
+          "timestamp": "2026-05-18 18:15:50.044675",
+          "confidence": 0.7333333333333333
+        },
+        "sentiment_analysis": {
+          "symbol": "BHEL.NS",
+          "analysis_type": "sentiment_analysis",
+          "data": {
+            "symbol": "BHEL.NS",
+            "news_available": false,
+            "sentiment_score": 0.0,
+            "sentiment_label": "NEUTRAL",
+            "news_count": 0,
+            "analysis_summary": {},
+            "detailed_analysis": {},
+            "news_headlines": [],
+            "topics_analysis": {},
+            "temporal_analysis": {},
+            "source_analysis": {},
+            "confidence_factors": {}
+          },
+          "timestamp": "2026-05-18 18:15:50.044724",
+          "confidence": 0.1
+        }
+      },
+      "composite_confidence": 0.41666666666666663,
+      "analyzers_count": 2
+    },
+    "timestamp": "2026-05-18 18:15:50.044728",
+    "confidence": 0.41666666666666663
+  }
+]
