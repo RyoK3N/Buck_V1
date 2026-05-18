@@ -309,6 +309,7 @@ class Buck:
         """Create default configuration."""
         return BuckConfig(
             openai_api_key=SETTINGS.openai_api_key,
+            openai_base_url=SETTINGS.openai_base_url,
             chat_model=SETTINGS.chat_model,
             temperature=SETTINGS.temperature,
             max_tokens=SETTINGS.max_completion_tokens,
@@ -375,11 +376,13 @@ class BuckFactory:
     def create_production_agent(
         openai_api_key: str,
         indian_api_key: str = "",
-        model: str = "gpt-4o"
+        model: str = "gpt-4o",
+        base_url: Optional[str] = None
     ) -> Buck:
         """Create production-ready agent."""
         config = BuckConfig(
             openai_api_key=openai_api_key,
+            openai_base_url=base_url,
             chat_model=model,
             temperature=0.1,
             max_tokens=500,
@@ -394,6 +397,6 @@ class BuckFactory:
         )
         
         analyzer = AnalyzerFactory.create_composite_analyzer()
-        predictor = PredictorFactory.create_openai_predictor(openai_api_key, model, 0.1)
+        predictor = PredictorFactory.create_openai_predictor(openai_api_key, model, 0.1, base_url)
         
         return Buck(config, data_provider, analyzer, predictor) 

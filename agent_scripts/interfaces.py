@@ -144,6 +144,7 @@ class INotificationService(ABC):
 class BuckConfig(TypedDict):
     """Buck configuration."""
     openai_api_key: str
+    openai_base_url: Optional[str]
     chat_model: str
     temperature: float
     max_tokens: int
