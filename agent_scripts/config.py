@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     # --- LLM Provider -------------------------------------------------------
     openai_api_key: str = Field(..., env="OPENAI_API_KEY")
     openai_base_url: Optional[str] = Field(None, env="OPENAI_BASE_URL")
-    chat_model: str = "gpt-4.1"                 # e.g. "gpt-4o", "google/gemini-2.0-flash-exp:free"
+    chat_model: str = "gpt-4o"                  # e.g. "gpt-4o", "google/gemini-2.0-flash-exp:free"
     embed_model: str = "text-embedding-ada-002"
 
     # --- Indian API for News -----------------------------------------------

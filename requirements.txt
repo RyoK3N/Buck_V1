@@ -4,6 +4,7 @@ requests
 aiohttp
 yfinance
 beautifulsoup4
+langchain-core
 openai
 python-dotenv
 nest_asyncio
@@ -14,3 +15,5 @@ pytest
 pytest-asyncio
 matplotlib
 plotly
+torch
+yfinance

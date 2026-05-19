@@ -24,8 +24,12 @@ class TechnicalAnalyzer(IAnalyzer):
     def analyze(self, data: StockData, **kwargs) -> AnalysisResult:
         """Perform comprehensive technical analysis."""
         try:
-            LOGGER.info(f"Starting technical analysis for {data['symbol']}")
-            
+            tool_names = list(self.tools.keys())
+            LOGGER.info(
+                f"Starting technical analysis for {data['symbol']} "
+                f"with {len(tool_names)} tools: {tool_names}"
+            )
+
             analysis_data = {
                 'symbol': data['symbol'],
                 'data_info': {
@@ -34,6 +38,7 @@ class TechnicalAnalyzer(IAnalyzer):
                     'end_date': data['end_date'],
                     'data_points': len(data['data'])
                 },
+                'tools_used': tool_names,
                 'tools_results': {},
                 'summary': {}
             }
@@ -416,7 +421,7 @@ class SentimentAnalyzer(IAnalyzer):
                         time_buckets['last_week'] += 1
                     else:
                         time_buckets['older'] += 1
-                except:
+                except (ValueError, TypeError, AttributeError):
                     time_buckets['older'] += 1
         
         # Calculate freshness score (higher weight for recent news)
@@ -635,4 +640,16 @@ class AnalyzerFactory:
     @staticmethod
     def create_composite_analyzer(analyzers: Optional[List[IAnalyzer]] = None) -> CompositeAnalyzer:
         """Create composite analyzer."""
-        return CompositeAnalyzer(analyzers) 
+        return CompositeAnalyzer(analyzers)
+
+    @staticmethod
+    def create_composite_analyzer_with_tools(tools: Optional[Dict[str, ITool]] = None) -> CompositeAnalyzer:
+        """Create composite analyzer with specific tool selection.
+
+        When *tools* is ``None`` the ``TechnicalAnalyzer`` falls back to all
+        built-in tools (existing behaviour).
+        """
+        return CompositeAnalyzer([
+            TechnicalAnalyzer(tools=tools),
+            SentimentAnalyzer(),
+        ])

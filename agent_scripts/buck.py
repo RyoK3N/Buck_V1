@@ -377,9 +377,19 @@ class BuckFactory:
         openai_api_key: str,
         indian_api_key: str = "",
         model: str = "gpt-4o",
-        base_url: Optional[str] = None
+        base_url: Optional[str] = None,
+        selected_tools: Optional[List[str]] = None,
     ) -> Buck:
-        """Create production-ready agent."""
+        """Create production-ready agent.
+
+        Parameters
+        ----------
+        selected_tools:
+            Optional list of built-in tool names to run.  When ``None`` all
+            tools are used (backward compatible).
+        """
+        from .tools import ToolFactory
+
         config = BuckConfig(
             openai_api_key=openai_api_key,
             openai_base_url=base_url,
@@ -389,14 +399,24 @@ class BuckFactory:
             news_items=10,
             log_level="INFO"
         )
-        
+
         data_provider = DataProviderFactory.create_composite_provider(
             yahoo_timeout=30,
             indian_api_key=indian_api_key,
             indian_timeout=30
         )
-        
-        analyzer = AnalyzerFactory.create_composite_analyzer()
+
+        # Build tool dict from selection (None → all tools)
+        tools = None
+        if selected_tools is not None:
+            available = set(ToolFactory.get_available_tools())
+            tools = {
+                name: ToolFactory.create_tool(name)
+                for name in selected_tools
+                if name in available
+            }
+
+        analyzer = AnalyzerFactory.create_composite_analyzer_with_tools(tools)
         predictor = PredictorFactory.create_openai_predictor(openai_api_key, model, 0.1, base_url)
-        
-        return Buck(config, data_provider, analyzer, predictor) 
+
+        return Buck(config, data_provider, analyzer, predictor)

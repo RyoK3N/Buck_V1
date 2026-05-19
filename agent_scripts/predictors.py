@@ -177,12 +177,20 @@ class OpenAIPredictor(IPredictor):
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
-                "response_format": {"type": "json_object"},
                 "temperature": self.temperature,
             }
-            
-            # Add token limits based on model
-            if self.model.lower().startswith("o1") or "gpt-4o" in self.model.lower():
+
+            # response_format json_object is only supported by native OpenAI models.
+            # OpenRouter free / third-party models often reject this parameter.
+            _m = self.model.lower()
+            _native_openai = _m.startswith("gpt-") or _m.startswith("o1") or \
+                             _m.startswith("o3") or _m.startswith("o4")
+            if _native_openai:
+                kwargs["response_format"] = {"type": "json_object"}
+
+            # Token-limit parameter name: reasoning models use max_completion_tokens,
+            # everything else (including OpenRouter) uses max_tokens.
+            if _m.startswith("o1") or _m.startswith("o3") or _m.startswith("o4"):
                 kwargs["max_completion_tokens"] = SETTINGS.max_completion_tokens
             else:
                 kwargs["max_tokens"] = SETTINGS.max_completion_tokens
