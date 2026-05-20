@@ -4,25 +4,25 @@ architecture-beta
     group external[External Services]
 
     service yfinance(internet)[YahooFinance] in external
-    service newsapi(internet)[IndianAPI News] in external
-    service openai(internet)[OpenAI / OpenRouter] in external
+    service newsapi(internet)[IndianAPI] in external
+    service openai(internet)[OpenAI] in external
 
-    service config(disk)[Config & Settings] in core
+    service config(disk)[Settings] in core
     service providers(server)[DataProviders] in core
     service toolfactory(server)[ToolFactory] in core
     service analyzers(server)[Analyzers] in core
     service predictor(server)[Predictor] in core
-    service buck(server)[Buck Orchestrator] in core
-    service cache(disk)[Output / Cache] in core
+    service buck(server)[Buck] in core
+    service cache(disk)[Output] in core
 
-    service backend(server)[FastAPI Backend] in ui
-    service frontend(server)[React Frontend] in ui
+    service backend(server)[FastAPI] in ui
+    service frontend(server)[React] in ui
     service cli(server)[CLI] in ui
     service visualizer(server)[Visualizer] in ui
 
-    group tools[Analysis Tools] in core
-    service maths(server)[Maths Tools] in tools
-    service dl(server)[Deep Learning] in tools
+    group tools[Tools] in core
+    service maths(server)[MathsTools] in tools
+    service dl(server)[DeepLearning] in tools
 
     yfinance:B -- T:providers
     newsapi:B -- T:providers
