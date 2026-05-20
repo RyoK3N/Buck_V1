@@ -1,24 +1,44 @@
 architecture-beta
-    group pipeline[Pipeline]
+    group core[Core Pipeline]
+    group ui[UI Layer]
+    group external[External Services]
 
-    service yfinance(internet)[YahooFinance]
-    service newsapi(internet)[NewsAPI]
-    service openai(internet)[OpenAI]
+    service yfinance(internet)[YahooFinance] in external
+    service newsapi(internet)[IndianAPI News] in external
+    service openai(internet)[OpenAI / OpenRouter] in external
 
-    service providers(server)[DataProviders] in pipeline
-    service tools(server)[AnalysisTools] in pipeline
-    service analyzers(server)[Analyzers] in pipeline
-    service predictor(server)[Predictor] in pipeline
-    service agent(server)[StockAgent] in pipeline
-    service cache(disk)[Cache] in pipeline
-    service cli(server)[CLI] in pipeline
+    service config(disk)[Config & Settings] in core
+    service providers(server)[DataProviders] in core
+    service toolfactory(server)[ToolFactory] in core
+    service analyzers(server)[Analyzers] in core
+    service predictor(server)[Predictor] in core
+    service buck(server)[Buck Orchestrator] in core
+    service cache(disk)[Output / Cache] in core
+
+    service backend(server)[FastAPI Backend] in ui
+    service frontend(server)[React Frontend] in ui
+    service cli(server)[CLI] in ui
+    service visualizer(server)[Visualizer] in ui
+
+    group tools[Analysis Tools] in core
+    service maths(server)[Maths Tools] in tools
+    service dl(server)[Deep Learning] in tools
 
     yfinance:B -- T:providers
-    newsapi:B -- T:tools
+    newsapi:B -- T:providers
     openai:B -- T:predictor
-    providers:B -- T:tools
-    tools:B -- T:analyzers
+
+    config:R -- L:buck
+    providers:B -- T:analyzers
+    toolfactory:R -- L:analyzers
+    maths:T -- B:toolfactory
+    dl:T -- B:toolfactory
     analyzers:B -- T:predictor
-    predictor:B -- T:agent
-    agent:R -- L:cache
-    agent:B -- T:cli
+    predictor:B -- T:buck
+    providers:R -- L:buck
+    buck:R -- L:cache
+
+    frontend:B -- T:backend
+    backend:B -- T:buck
+    backend:R -- L:visualizer
+    cli:B -- T:buck
