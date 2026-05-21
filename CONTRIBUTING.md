@@ -9,7 +9,7 @@ Thanks for your interest in contributing. This guide covers how to set up a deve
 ### 1. Fork and clone
 
 ```bash
-git clone https://github.com/<your-username>/Buck_V1.git
+git clone https://github.com/RyoK3N/Buck_V1.git
 cd Buck_V1
 ```
 
