@@ -178,6 +178,7 @@ Rules:
 ### PR checklist
 
 - [ ] Tests pass (`pytest tests/ -v`)
+- [ ] New or changed code includes matching tests (see [testing requirements](#contributor-testing-requirements))
 - [ ] No new linting errors
 - [ ] TypeScript compiles if frontend was changed (`npx tsc --noEmit`)
 - [ ] New tools follow the `TOOL_CLASS` + `TOOL_FUNC` pattern
@@ -194,36 +195,63 @@ Rules:
 
 ## Running Tests Locally
 
+### Test categories
+
+The test suite is split into two categories:
+
+| Category | Marker | What it tests | Network? |
+|----------|--------|---------------|----------|
+| **Unit tests** | *(default)* | Tools, analyzers, predictors, Buck orchestrator, config | No — all external calls are mocked |
+| **Integration tests** | `@pytest.mark.network` | Live data from Yahoo Finance / Indian API | Yes — requires internet |
+
+### Commands
+
 ```bash
-# Full test suite
+# Full test suite (unit + integration)
 pytest tests/ -v
 
-# Specific test file
-pytest tests/test_config.py -v
+# Unit tests only (offline, no API keys needed)
+pytest tests/ -v -m "not network"
+
+# Specific file
+pytest tests/test_tools.py -v
 
 # With coverage report
+pytest tests/ --cov=agent_scripts --cov-report=term-missing
+
+# HTML coverage report
 pytest tests/ --cov=agent_scripts --cov-report=html
 open htmlcov/index.html
-
-# Quick tool smoke test
-PYTHONPATH=. python -c "
-import numpy as np, pandas as pd
-from agent_scripts.tools import ToolFactory, set_stock_data
-
-np.random.seed(42)
-n = 200
-close = 100 + np.cumsum(np.random.randn(n) * 0.5)
-df = pd.DataFrame({
-    'Open': close - 0.25, 'High': close + 0.5,
-    'Low': close - 0.5, 'Close': close,
-    'Volume': np.random.randint(1000, 10000, n).astype(float),
-}, index=pd.date_range('2024-01-01', periods=n, freq='h'))
-
-set_stock_data(df)
-for t in ToolFactory.get_langchain_tools():
-    print(f'{t.name}: {t.invoke({})}')
-"
 ```
+
+### Shared fixtures (tests/conftest.py)
+
+The `conftest.py` provides reusable fixtures for all test files:
+
+| Fixture | Type | Description |
+|---------|------|-------------|
+| `sample_ohlcv_df` | `pd.DataFrame` | 200-row OHLCV DataFrame with DatetimeIndex |
+| `sample_stock_data` | `StockData` | TypedDict wrapping the DataFrame |
+| `sample_news_data` | `NewsData` | TypedDict with mixed-sentiment headlines |
+| `sample_analysis_result` | `AnalysisResult` | Pre-built analysis result for predictor tests |
+| `_patch_settings` | *(auto-use)* | Sets `OPENAI_API_KEY=test-key` and clears the LRU cache |
+
+### Contributor testing requirements
+
+When you submit a PR, your tests must match the area you changed:
+
+| If you changed… | Add / update tests in… |
+|-----------------|----------------------|
+| A tool in `tools/` | `tests/test_tools.py` |
+| `agent_scripts/analyzers.py` | `tests/test_analyzers.py` |
+| `agent_scripts/predictors.py` | `tests/test_predictors.py` |
+| `agent_scripts/buck.py` | `tests/test_buck.py` |
+| `agent_scripts/config.py` | `tests/test_config.py` |
+| `agent_scripts/data_providers.py` | `tests/test_data_provider.py` |
+
+**New tools** must include at least one test in `test_tools.py` that:
+1. Calls `execute()` with `sample_ohlcv_df`
+2. Asserts the result contains `signal` (BUY/SELL/HOLD) and `strength` (0.0–1.0)
 
 ---
 

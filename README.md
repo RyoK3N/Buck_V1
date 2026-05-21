@@ -407,15 +407,34 @@ python -m agent_scripts.cli analyze BHEL.NS \
 
 ## Testing
 
+The test suite covers tools, analyzers, predictors, the Buck orchestrator, and configuration. Tests are split into offline unit tests and network-dependent integration tests.
+
 ```bash
-# Run the test suite
+# Full test suite
 pytest tests/ -v
 
+# Unit tests only (no network, no API keys needed)
+pytest tests/ -v -m "not network"
+
 # With coverage
-pytest tests/ --cov=agent_scripts --cov-report=html
+pytest tests/ --cov=agent_scripts --cov-report=term-missing
 ```
 
-CI runs on every push to `main` and on pull requests, testing against Python 3.10 and 3.11. See `.github/workflows/python-package.yml`.
+### Test files
+
+| File | What it tests |
+|------|---------------|
+| `test_config.py` | Settings, API key persistence, LRU cache |
+| `test_tools.py` | ToolFactory discovery, BaseTool, RSI, MACD, MA, OBV, candlestick, S/R |
+| `test_analyzers.py` | TechnicalAnalyzer, SentimentAnalyzer, CompositeAnalyzer, AnalyzerFactory |
+| `test_predictors.py` | OpenAIPredictor (mocked), EnsemblePredictor, PredictorFactory |
+| `test_buck.py` | Buck orchestrator, cache, confidence, context manager, BuckFactory |
+| `test_version.py` | Version constant and CLI output |
+| `test_data_provider.py` | Yahoo Finance live fetch (`@pytest.mark.network`) |
+
+CI runs on every push to `main` and on pull requests, testing against Python 3.10 and 3.11 with coverage reporting. See `.github/workflows/python-package.yml`.
+
+For contributor testing requirements, see [CONTRIBUTING.md](CONTRIBUTING.md#contributor-testing-requirements).
 
 ---
 
