@@ -107,3 +107,41 @@ class ToolsRegistryResponse(BaseModel):
 # Analyze/batch responses are arbitrary dicts from Buck — return as-is
 AnalyzeResponse = Dict[str, Any]
 BatchResponse = Dict[str, Any]
+
+
+# ── RL / Reinforcement Learning ──────────────────────────────────────────────
+
+class RLTrainRequest(BaseModel):
+    symbol: str
+    start_date: str = Field(..., description="YYYY-MM-DD")
+    end_date: str = Field(..., description="YYYY-MM-DD")
+    interval: str = "1d"
+    algorithm: str = "dqn"
+    model_id: str = "default_rl_model"
+    episodes: int = 50
+    hidden_dim: int = 128
+    learning_rate: float = 0.001
+    initial_capital: float = 100000.0
+    indian_api_key: Optional[str] = ""
+
+
+class RLPredictRequest(BaseModel):
+    symbol: str
+    start_date: str = Field(..., description="YYYY-MM-DD")
+    end_date: str = Field(..., description="YYYY-MM-DD")
+    interval: str = "1d"
+    model_id: str = "default_rl_model"
+    initial_capital: float = 100000.0
+    indian_api_key: Optional[str] = ""
+
+
+class RLSimulateRequest(BaseModel):
+    model_id: str
+    symbol: str
+    interval: str = "1m"
+    initial_capital: float = 100000.0
+    indian_api_key: Optional[str] = ""
+
+
+class RLModelsResponse(BaseModel):
+    models: List[Dict[str, Any]]

@@ -9,8 +9,9 @@ import ResultsPanel from './components/ResultsPanel'
 import VisualizerPanel from './components/VisualizerPanel'
 import ToolsConfigPanel from './components/ToolsConfigPanel'
 import LoadingSpinner from './components/LoadingSpinner'
+import RLPanel from './components/RLPanel'
 
-type Tab = 'single' | 'batch' | 'visualizer'
+type Tab = 'single' | 'batch' | 'visualizer' | 'rl'
 
 export default function App() {
   const [config, setConfig] = useState<Config>({
@@ -88,7 +89,7 @@ export default function App() {
 
   function switchTab(t: Tab) {
     setTab(t)
-    if (t !== 'visualizer') {
+    if (t !== 'visualizer' && t !== 'rl') {
       setResult(null)
       setError(null)
     }
@@ -98,6 +99,7 @@ export default function App() {
     single: 'Single',
     batch: 'Batch',
     visualizer: 'Visualizer',
+    rl: 'RL Lab',
   }
 
   return (
@@ -114,7 +116,7 @@ export default function App() {
         <div className="min-w-0 flex-1 space-y-6">
           {/* Tab switcher */}
           <div className="flex gap-1 rounded-lg border border-gray-200 bg-white p-1 shadow-sm w-fit">
-            {(['single', 'batch', 'visualizer'] as Tab[]).map(t => (
+            {(['single', 'batch', 'visualizer', 'rl'] as Tab[]).map(t => (
               <button
                 key={t}
                 onClick={() => switchTab(t)}
@@ -129,13 +131,18 @@ export default function App() {
             ))}
           </div>
 
+          {/* RL Lab tab */}
+          {tab === 'rl' && (
+            <RLPanel config={config} />
+          )}
+
           {/* Visualizer tab */}
           {tab === 'visualizer' && (
             <VisualizerPanel config={config} />
           )}
 
           {/* Analysis tabs */}
-          {tab !== 'visualizer' && (
+          {tab !== 'visualizer' && tab !== 'rl' && (
             <>
               <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm space-y-4">
                 {tab === 'single' ? (
