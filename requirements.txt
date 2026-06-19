@@ -17,3 +17,5 @@ matplotlib
 plotly
 torch
 yfinance
+fastapi
+uvicorn

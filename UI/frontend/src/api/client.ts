@@ -7,6 +7,13 @@ import type {
   VisualizeRequest,
   VisualizeResponse,
   ToolsRegistry,
+  RLTrainRequest,
+  RLTrainResponse,
+  RLPredictRequest,
+  RLPredictResponse,
+  RLSimulateRequest,
+  RLSimulateResponse,
+  RLModelsResponse,
 } from '../types'
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
@@ -88,5 +95,32 @@ export async function getChartTypes(): Promise<ChartTypeInfo[]> {
 
 export async function visualize(req: VisualizeRequest): Promise<VisualizeResponse> {
   const { data } = await http.post<VisualizeResponse>('/visualize', req)
+  return data
+}
+
+// ── RL / Reinforcement Learning ──────────────────────────────────────────────
+
+export async function rlTrain(req: RLTrainRequest): Promise<RLTrainResponse> {
+  const { data } = await http.post<RLTrainResponse>('/rl/train', req)
+  return data
+}
+
+export async function rlPredict(req: RLPredictRequest): Promise<RLPredictResponse> {
+  const { data } = await http.post<RLPredictResponse>('/rl/predict', req)
+  return data
+}
+
+export async function rlSimulate(req: RLSimulateRequest): Promise<RLSimulateResponse> {
+  const { data } = await http.post<RLSimulateResponse>('/rl/simulate', req)
+  return data
+}
+
+export async function rlGetModels(): Promise<RLModelsResponse> {
+  const { data } = await http.get<RLModelsResponse>('/rl/models')
+  return data
+}
+
+export async function rlDeleteModel(modelId: string): Promise<{ status: string; model_id: string }> {
+  const { data } = await http.delete(`/rl/models/${modelId}`)
   return data
 }
