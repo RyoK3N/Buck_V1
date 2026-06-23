@@ -1,0 +1,5 @@
+[tool.pytest.ini_options]
+markers = [
+    "network: tests that require network access (deselect with '-m \"not network\"')",
+]
+asyncio_mode = "auto"

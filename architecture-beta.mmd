@@ -1,0 +1,44 @@
+architecture-beta
+    group core[Core Pipeline]
+    group ui[UI Layer]
+    group external[External Services]
+
+    service yfinance(internet)[YahooFinance] in external
+    service newsapi(internet)[IndianAPI] in external
+    service openai(internet)[OpenAI] in external
+
+    service config(disk)[Settings] in core
+    service providers(server)[DataProviders] in core
+    service toolfactory(server)[ToolFactory] in core
+    service analyzers(server)[Analyzers] in core
+    service predictor(server)[Predictor] in core
+    service buck(server)[Buck] in core
+    service cache(disk)[Output] in core
+
+    service backend(server)[FastAPI] in ui
+    service frontend(server)[React] in ui
+    service cli(server)[CLI] in ui
+    service visualizer(server)[Visualizer] in ui
+
+    group tools[Tools] in core
+    service maths(server)[MathsTools] in tools
+    service dl(server)[DeepLearning] in tools
+
+    yfinance:B -- T:providers
+    newsapi:B -- T:providers
+    openai:B -- T:predictor
+
+    config:R -- L:buck
+    providers:B -- T:analyzers
+    toolfactory:R -- L:analyzers
+    maths:T -- B:toolfactory
+    dl:T -- B:toolfactory
+    analyzers:B -- T:predictor
+    predictor:B -- T:buck
+    providers:R -- L:buck
+    buck:R -- L:cache
+
+    frontend:B -- T:backend
+    backend:B -- T:buck
+    backend:R -- L:visualizer
+    cli:B -- T:buck

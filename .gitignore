@@ -1,0 +1,30 @@
+# ==============================================================================
+# Python & Environment
+# ==============================================================================
+# Ignores all files inside any __pycache__ folder, anywhere in the project
+**/__pycache__/*
+*.py[cod]
+*$py.class
+
+# Environment files
+.env
+.env.*
+
+# ==============================================================================
+# Project Directories & Data
+# ==============================================================================
+# Keep the input directory, but ignore all files inside it
+input/
+input/*
+!input/.gitkeep
+
+# Keep the output directory, but ignore all files inside it
+output/*
+!output/.gitkeep
+
+# Keep the weights directory, but ignore all files inside it
+tools/rl/weights/*
+!tools/rl/weights/.gitkeep
+
+# Build/Visualizer artifacts
+buck_visualizer/data-viz/
