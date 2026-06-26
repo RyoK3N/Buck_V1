@@ -206,6 +206,72 @@ export function openAccuracyWebSocket(): WebSocket {
   return new WebSocket(wsUrl)
 }
 
+// ── d3 training-session observability ─────────────────────────────────────────
+
+export interface D3ChartTypeInfo {
+  id: string
+  label: string
+  description: string
+}
+
+export interface TrainingSessionSummary {
+  session_id: string
+  model_id: string
+  symbol: string | null
+  algorithm: string | null
+  interval: string | null
+  episodes: number | null
+  created_at: string | null
+  final_return_pct: number | null
+  final_sharpe: number | null
+}
+
+// A framework-agnostic d3-buck/1 spec produced by UI/backend/d3_viz.py.
+export interface D3Spec {
+  spec_version: string
+  chart: string
+  mark: 'line' | 'area' | 'multiline' | 'bar' | 'heatmap'
+  data: Record<string, unknown>[]
+  encoding: Record<string, unknown>
+  meta: Record<string, unknown>
+}
+
+export async function getD3ChartTypes(): Promise<D3ChartTypeInfo[]> {
+  const { data } = await http.get<{ chart_types: D3ChartTypeInfo[] }>('/viz/d3-chart-types')
+  return data.chart_types
+}
+
+export async function getTrainingSessions(
+  params: { model_id?: string; symbol?: string; limit?: number } = {},
+): Promise<TrainingSessionSummary[]> {
+  const { data } = await http.get<{ sessions: TrainingSessionSummary[] }>('/viz/training-sessions', { params })
+  return data.sessions
+}
+
+export async function getTrainingChart(sessionId: string, chart: string): Promise<{ spec: D3Spec; description: string }> {
+  const { data } = await http.get<{ spec: D3Spec; description: string }>(`/viz/training/${sessionId}/${chart}`)
+  return data
+}
+
+// ── Headroom (context engineering) ────────────────────────────────────────────
+
+export interface HeadroomUsage {
+  calls: number
+  tokens_raw: number
+  tokens_compressed: number
+  tokens_saved: number
+  reduction_pct: number
+  est_cost_raw_usd: number
+  est_cost_compressed_usd: number
+  est_cost_saved_usd: number
+  per_tool: Record<string, Record<string, number>>
+}
+
+export async function getHeadroomStats(): Promise<{ headroom_available: boolean; usage: HeadroomUsage; cache: Record<string, number> }> {
+  const { data } = await http.get('/mcp/headroom')
+  return data
+}
+
 // ── MCP introspection ────────────────────────────────────────────────────────
 
 export async function getMCPTools(): Promise<MCPToolInfo[]> {

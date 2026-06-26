@@ -51,8 +51,15 @@ def test_dispatch_unknown_tool_raises():
         asyncio.run(dispatch_async("does_not_exist", {}))
 
 
+def _payload(envelope):
+    """dispatch_async returns a headroom envelope {_headroom, data}; when the
+    compressor is a passthrough (headroom not installed) `data` is the raw dict."""
+    assert "_headroom" in envelope and "data" in envelope
+    return envelope["data"]
+
+
 def test_dispatch_list_intervals_no_network():
-    result = asyncio.run(dispatch_async("list_available_intervals", {}))
+    result = _payload(asyncio.run(dispatch_async("list_available_intervals", {})))
     assert "intervals" in result
     assert "1d" in result["intervals"]
 
@@ -62,7 +69,7 @@ def test_dispatch_list_recent_predictions_reads_db(fresh_db):
         symbol="DSP.NS", model="claude",
         forecast={"date": "2026-06-22", "open": 1, "high": 2, "low": 0.5, "close": 1.5, "confidence": 0.4},
     )
-    result = asyncio.run(dispatch_async("list_recent_predictions", {"limit": 5}))
+    result = _payload(asyncio.run(dispatch_async("list_recent_predictions", {"limit": 5})))
     assert "predictions" in result
     assert any(r["symbol"] == "DSP.NS" for r in result["predictions"])
 

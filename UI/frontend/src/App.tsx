@@ -11,8 +11,9 @@ import ToolsConfigPanel from './components/ToolsConfigPanel'
 import LoadingSpinner from './components/LoadingSpinner'
 import RLPanel from './components/RLPanel'
 import ClaudePanel from './components/claude/ClaudePanel'
+import TrainingObservability from './components/TrainingObservability'
 
-type Tab = 'single' | 'batch' | 'visualizer' | 'rl' | 'claude'
+type Tab = 'single' | 'batch' | 'visualizer' | 'rl' | 'training' | 'claude'
 
 export default function App() {
   const [config, setConfig] = useState<Config>({
@@ -92,7 +93,7 @@ export default function App() {
 
   function switchTab(t: Tab) {
     setTab(t)
-    if (t !== 'visualizer' && t !== 'rl' && t !== 'claude') {
+    if (t !== 'visualizer' && t !== 'rl' && t !== 'training' && t !== 'claude') {
       setResult(null)
       setError(null)
     }
@@ -103,6 +104,7 @@ export default function App() {
     batch: 'Batch',
     visualizer: 'Visualizer',
     rl: 'RL Lab',
+    training: 'Training',
     claude: 'Claude',
   }
 
@@ -120,7 +122,7 @@ export default function App() {
         <div className="min-w-0 flex-1 space-y-6">
           {/* Tab switcher */}
           <div className="flex gap-1 rounded-lg border border-gray-200 bg-white p-1 shadow-sm w-fit">
-            {(['single', 'batch', 'visualizer', 'rl', 'claude'] as Tab[]).map(t => (
+            {(['single', 'batch', 'visualizer', 'rl', 'training', 'claude'] as Tab[]).map(t => (
               <button
                 key={t}
                 onClick={() => switchTab(t)}
@@ -150,8 +152,15 @@ export default function App() {
             <VisualizerPanel config={config} />
           )}
 
+          {/* Training observability tab (d3) */}
+          {tab === 'training' && (
+            <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+              <TrainingObservability />
+            </div>
+          )}
+
           {/* Analysis tabs */}
-          {tab !== 'visualizer' && tab !== 'rl' && tab !== 'claude' && (
+          {tab !== 'visualizer' && tab !== 'rl' && tab !== 'training' && tab !== 'claude' && (
             <>
               <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm space-y-4">
                 {tab === 'single' ? (

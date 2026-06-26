@@ -207,6 +207,39 @@ async def visualize(req: VisualizeRequest) -> VisualizeResponse:
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+# ── d3 training-session observability ────────────────────────────────────────
+
+@router.get("/viz/d3-chart-types")
+async def viz_d3_chart_types() -> Dict[str, Any]:
+    from .d3_viz import D3_CHART_CATALOGUE
+    return {"chart_types": D3_CHART_CATALOGUE}
+
+
+@router.get("/viz/training-sessions")
+async def viz_training_sessions(
+    model_id: str | None = None,
+    symbol: str | None = None,
+    limit: int = 50,
+) -> Dict[str, Any]:
+    from tools.rl.sessions import list_sessions
+    return {"sessions": list_sessions(model_id=model_id, symbol=symbol, limit=limit)}
+
+
+@router.get("/viz/training/{session_id}/{chart}")
+async def viz_training_chart(session_id: str, chart: str) -> Dict[str, Any]:
+    from tools.rl.sessions import load_session
+    from .d3_viz import build_d3_spec, D3_CHART_DESCRIPTIONS
+    session = load_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail=f"training session {session_id!r} not found")
+    return {
+        "session_id": session_id,
+        "chart": chart,
+        "description": D3_CHART_DESCRIPTIONS.get(chart, ""),
+        "spec": build_d3_spec(chart, session),
+    }
+
+
 # ── RL / Reinforcement Learning ──────────────────────────────────────────────
 
 async def _rl_train_ppo_continuous(req) -> Dict[str, Any]:
@@ -278,17 +311,21 @@ async def _rl_train_ppo_continuous(req) -> Dict[str, Any]:
                         summary["total_trades"])
 
         agent.save(req.model_id)
-        return {
+        result = {
             "model_id": req.model_id,
             "algorithm": "ppo_continuous",
             "symbol": req.symbol,
             "episodes": req.episodes,
             "total_steps": len(df),
             "episode_rewards": episode_rewards,
+            "equity_curve": env.equity_curve[-200:] if getattr(env, "equity_curve", None) else [],
             "final_summary": last_summary,
             "best_return_pct": round(best_return, 4),
             "status": "trained",
         }
+        from tools.rl.sessions import save_session
+        result["session_id"] = save_session(result, request=req)
+        return result
     except HTTPException:
         raise
     except Exception as exc:
@@ -443,7 +480,7 @@ async def rl_train(req: RLTrainRequest) -> Dict[str, Any]:
         agent.save(req.model_id)
         wallet.close_position(float(close[-1]))
         summary = wallet.get_summary(float(close[-1]))
-        return {
+        result = {
             'model_id': req.model_id,
             'algorithm': req.algorithm,
             'symbol': req.symbol,
@@ -455,6 +492,9 @@ async def rl_train(req: RLTrainRequest) -> Dict[str, Any]:
             'best_reward': round(best_reward, 4),
             'status': 'trained',
         }
+        from tools.rl.sessions import save_session
+        result["session_id"] = save_session(result, request=req)
+        return result
     except HTTPException:
         raise
     except Exception as exc:
@@ -806,6 +846,28 @@ async def mcp_status() -> MCPStatusResponse:
         transport="sse" if SETTINGS.mount_mcp_in_api else "stdio",
         tool_count=len(list_tool_names()),
     )
+
+
+@router.get("/mcp/headroom")
+async def mcp_headroom() -> Dict[str, Any]:
+    """Token + cost accounting for the headroom context-engineering layer."""
+    from mcp_server.context_engineering import USAGE
+    from mcp_server.context_engineering.compressor import headroom_available
+    from mcp_server.context_engineering.middleware import cache_stats
+    return {
+        "headroom_available": headroom_available(),
+        "usage": USAGE.snapshot(),
+        "cache": cache_stats(),
+    }
+
+
+@router.post("/mcp/headroom/reset")
+async def mcp_headroom_reset() -> Dict[str, Any]:
+    from mcp_server.context_engineering import USAGE
+    from mcp_server.context_engineering.middleware import clear_cache
+    USAGE.reset()
+    clear_cache()
+    return {"status": "reset", "usage": USAGE.snapshot()}
 
 
 @router.post("/mcp/invoke", response_model=MCPInvokeResponse)

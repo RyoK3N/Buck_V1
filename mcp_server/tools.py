@@ -267,6 +267,74 @@ async def compare_predictions_vs_actual(
     return {"symbol": symbol, "lookback_days": lookback_days, "series": series}
 
 
+# ── Context engineering (headroom) ───────────────────────────────────────────
+
+async def headroom_stats() -> Dict[str, Any]:
+    """Token + cost accounting for the headroom compression layer."""
+    from mcp_server.context_engineering import USAGE
+    from mcp_server.context_engineering.compressor import headroom_available
+    from mcp_server.context_engineering.middleware import cache_stats
+    return {
+        "headroom_available": headroom_available(),
+        "usage": USAGE.snapshot(),
+        "cache": cache_stats(),
+    }
+
+
+async def headroom_reset() -> Dict[str, Any]:
+    """Reset the cost/token tracker and clear the compression cache."""
+    from mcp_server.context_engineering import USAGE
+    from mcp_server.context_engineering.middleware import clear_cache
+    USAGE.reset()
+    clear_cache()
+    return {"status": "reset", "usage": USAGE.snapshot()}
+
+
+# ── Training-session visualization (d3) ──────────────────────────────────────
+
+async def list_training_sessions(
+    model_id: Optional[str] = None,
+    symbol: Optional[str] = None,
+    limit: int = 50,
+) -> Dict[str, Any]:
+    from tools.rl.sessions import list_sessions
+    return {"sessions": list_sessions(model_id=model_id, symbol=symbol, limit=limit)}
+
+
+async def list_d3_chart_types() -> Dict[str, Any]:
+    from UI.backend.d3_viz import D3_CHART_CATALOGUE
+    return {"chart_types": D3_CHART_CATALOGUE}
+
+
+async def visualize_training(
+    session_id: str,
+    chart: str = "reward_curve",
+) -> Dict[str, Any]:
+    from tools.rl.sessions import load_session
+    from UI.backend.d3_viz import build_d3_spec, D3_CHART_DESCRIPTIONS
+    session = load_session(session_id)
+    if session is None:
+        return {"error": f"training session {session_id!r} not found"}
+    return {
+        "session_id": session_id,
+        "chart": chart,
+        "description": D3_CHART_DESCRIPTIONS.get(chart, ""),
+        "spec": build_d3_spec(chart, session),
+    }
+
+
+# ── Real-time intraday session (read-only) ───────────────────────────────────
+
+async def rt_session_status(symbol: Optional[str] = None) -> Dict[str, Any]:
+    from realtime.state import get_status
+    return get_status(symbol)
+
+
+async def rt_session_history(symbol: Optional[str] = None, limit: int = 50) -> Dict[str, Any]:
+    from realtime.state import get_history
+    return {"steps": get_history(symbol, limit=limit)}
+
+
 # ── Dispatcher ──────────────────────────────────────────────────────────────
 
 _IMPLS: Dict[str, Callable[..., Awaitable[Dict[str, Any]]]] = {
@@ -284,7 +352,32 @@ _IMPLS: Dict[str, Callable[..., Awaitable[Dict[str, Any]]]] = {
     "get_prediction_accuracy": get_prediction_accuracy,
     "list_recent_predictions": list_recent_predictions,
     "compare_predictions_vs_actual": compare_predictions_vs_actual,
+    # context engineering
+    "headroom_stats": headroom_stats,
+    "headroom_reset": headroom_reset,
+    # d3 training visualization
+    "list_training_sessions": list_training_sessions,
+    "list_d3_chart_types": list_d3_chart_types,
+    "visualize_training": visualize_training,
+    # real-time intraday session (read-only)
+    "rt_session_status": rt_session_status,
+    "rt_session_history": rt_session_history,
 }
+
+
+# Wrapped impls (headroom compression + battle-tested-patterns middleware).
+# Built lazily so importing `tools` never hard-depends on the CE layer.
+_WRAPPED: Dict[str, Callable[..., Awaitable[Dict[str, Any]]]] = {}
+
+
+def get_wrapped(name: str) -> Callable[..., Awaitable[Dict[str, Any]]]:
+    """Return the context-engineered wrapper for a tool, building it on first use."""
+    fn = _WRAPPED.get(name)
+    if fn is None:
+        from mcp_server.context_engineering import wrap_tool
+        fn = wrap_tool(name, _IMPLS[name])
+        _WRAPPED[name] = fn
+    return fn
 
 
 def list_tool_names() -> List[str]:
@@ -292,7 +385,10 @@ def list_tool_names() -> List[str]:
 
 
 async def dispatch_async(name: str, args: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Look up and invoke a tool by name. Returns its result or an error dict."""
+    """Look up and invoke a tool by name (through the headroom wrapper layer).
+
+    Returns the compression envelope ``{"_headroom": {...}, "data": ...}``.
+    """
     if name not in _IMPLS:
         raise KeyError(f"unknown tool: {name!r}. Known: {sorted(_IMPLS)}")
     if name not in BUCK_TOOLS_BY_NAME:
@@ -301,12 +397,22 @@ async def dispatch_async(name: str, args: Optional[Dict[str, Any]] = None) -> Di
 
     start = time.perf_counter()
     try:
-        result = await _IMPLS[name](**(args or {}))
+        result = await get_wrapped(name)(**(args or {}))
         _record_call(name, ok=True, latency_ms=(time.perf_counter() - start) * 1000)
         return result
     except Exception as exc:  # noqa: BLE001
         _record_call(name, ok=False, latency_ms=(time.perf_counter() - start) * 1000, error=str(exc))
         raise
+
+
+async def dispatch_raw_async(name: str, args: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Invoke a tool *without* the compression wrapper (raw dict result).
+
+    Used by internal callers (e.g. REST routes) that want the original payload.
+    """
+    if name not in _IMPLS:
+        raise KeyError(f"unknown tool: {name!r}. Known: {sorted(_IMPLS)}")
+    return await _IMPLS[name](**(args or {}))
 
 
 def dispatch(name: str, args: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

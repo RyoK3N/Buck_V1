@@ -23,12 +23,18 @@ mcp = FastMCP("buck")
 def _register_all() -> None:
     """Register every implementation in `tools._IMPLS` against the FastMCP instance,
     using metadata from the registry. Doing this dynamically keeps the registry
-    as the single source of truth."""
+    as the single source of truth.
+
+    Each impl is wrapped by the context-engineering middleware (headroom
+    compression + battle-tested-patterns resilience) so every tool result Claude
+    sees is compressed and accounted for in the `USAGE` tracker.
+    """
     for name, impl in _tools_module._IMPLS.items():
         meta = BUCK_TOOLS_BY_NAME.get(name)
         if meta is None:
             continue
-        mcp.tool(name=name, description=meta.get("description", ""))(impl)
+        wrapped = _tools_module.get_wrapped(name)
+        mcp.tool(name=name, description=meta.get("description", ""))(wrapped)
 
 
 _register_all()

@@ -23,3 +23,5 @@ anthropic>=0.40.0
 mcp>=1.0.0
 apscheduler>=3.10
 websockets
+# Context engineering — compresses MCP tool outputs to cut Claude token usage
+headroom-ai[all]

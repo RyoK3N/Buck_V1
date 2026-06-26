@@ -63,6 +63,23 @@ Examples:
     # Demo command
     demo_parser = subparsers.add_parser('demo', help='Run a demo analysis')
     demo_parser.add_argument('--symbol', default='BHEL.NS', help='Symbol for demo (default: BHEL.NS)')
+
+    # Real-time intraday simulation (delegates to realtime.cli)
+    rt_parser = subparsers.add_parser(
+        'simulate-rt',
+        help='Real-time intraday RL simulation with online learning (market hours or --replay)')
+    rt_parser.add_argument('--symbol', required=True, help='Ticker, e.g. BHEL.NS')
+    rt_parser.add_argument('--model-id', required=True, help='A trained ppo_continuous model id')
+    rt_parser.add_argument('--interval', default='1m', help='Bar interval (default: 1m)')
+    rt_parser.add_argument('--exchange', default=None, help='Exchange for market-hours gate')
+    rt_parser.add_argument('--poll-seconds', type=float, default=None, help='Seconds between live polls')
+    rt_parser.add_argument('--capital', type=float, default=100000.0, help='Starting capital')
+    rt_parser.add_argument('--online-update-every', type=int, default=None, help='Online PPO update every N bars')
+    rt_parser.add_argument('--max-steps', type=int, default=2000, help='Stop after this many bars')
+    rt_parser.add_argument('--indian-api-key', default=None, help='Live-data API key (or env INDIAN_API_KEY)')
+    rt_parser.add_argument('--replay', action='store_true', help='Replay historical bars instead of live polling')
+    rt_parser.add_argument('--replay-start', default=None, help='Replay start date YYYY-MM-DD')
+    rt_parser.add_argument('--replay-end', default=None, help='Replay end date YYYY-MM-DD')
     
     # Configuration
     parser.add_argument('--api-key', help='OpenAI API key (or set OPENAI_API_KEY env var)')
@@ -248,12 +265,19 @@ async def main() -> None:
     if not args.command:
         parser.print_help()
         return
-    
+
     # Setup logging
     if args.verbose:
         import logging
         logging.getLogger("market_forecaster").setLevel(logging.DEBUG)
-    
+
+    # simulate-rt is self-contained (no OpenAI needed) — run it before key checks.
+    if args.command == 'simulate-rt':
+        from realtime.cli import run_from_args
+        # run_from_args is blocking/synchronous; offload so we don't block the loop.
+        await asyncio.to_thread(run_from_args, args)
+        return
+
     # Validate API key
     if not args.api_key:
         from .config import ensure_api_keys
@@ -262,7 +286,7 @@ async def main() -> None:
                 "❌ Error: OpenAI API key required. Use `set_api_keys` or set OPENAI_API_KEY env var."
             )
             return
-    
+
     # Route to appropriate command
     try:
         if args.command == 'analyze':

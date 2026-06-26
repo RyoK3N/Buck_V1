@@ -257,6 +257,95 @@ BUCK_TOOLS: List[Dict[str, Any]] = [
             "required": ["symbol"],
         },
     },
+    # ── Context engineering / headroom (new) ────────────────────────────────
+    {
+        "name": "headroom_stats",
+        "description": (
+            "Report the context-engineering layer's token + cost accounting: how many tokens "
+            "the headroom compression layer has saved across all tool calls this session, the "
+            "estimated USD cost saved, a per-tool breakdown, and cache hit-rate. Use this to "
+            "audit how much context budget Buck's tools are consuming."
+        ),
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "headroom_reset",
+        "description": "Reset the headroom token/cost tracker and clear the compression cache. Use at the start of a fresh measurement.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    # ── Training-session observability (d3) ──────────────────────────────────
+    {
+        "name": "list_training_sessions",
+        "description": (
+            "List saved RL training sessions (one per `rl_train` run) with their model_id, symbol, "
+            "algorithm, interval, episode count and final return. Call this to discover session_ids "
+            "to pass to `visualize_training`."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "model_id": {"type": "string", "description": "Optional model_id filter"},
+                "symbol": {"type": "string", "description": "Optional symbol filter"},
+                "limit": {"type": "integer", "default": 50, "minimum": 1, "maximum": 200},
+            },
+        },
+    },
+    {
+        "name": "list_d3_chart_types",
+        "description": "List the available d3 chart types for `visualize_training` (reward_curve, equity_curve, loss_curves, return_distribution, drawdown_curve, action_heatmap).",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "visualize_training",
+        "description": (
+            "Render a training session as an interactive d3 chart spec (d3-buck/1) for observability: "
+            "reward curve, equity curve, policy/value/entropy loss curves, return distribution, drawdown, "
+            "or action heatmap. Returns a framework-agnostic data+encoding spec the Buck frontend renders "
+            "with d3. Use this to reason about how an RL model trained — convergence, overfitting, drawdowns."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "session_id": {"type": "string", "description": "From `list_training_sessions`"},
+                "chart": {
+                    "type": "string",
+                    "enum": [
+                        "reward_curve", "equity_curve", "loss_curves",
+                        "return_distribution", "drawdown_curve", "action_heatmap",
+                    ],
+                    "default": "reward_curve",
+                },
+            },
+            "required": ["session_id"],
+        },
+    },
+    # ── Real-time intraday session (read-only) ──────────────────────────────
+    {
+        "name": "rt_session_status",
+        "description": (
+            "Get the current state of a live intraday simulation session started via the CLI "
+            "(`python -m realtime.cli`): latest action / target position, equity, intraday PnL, "
+            "number of online learning updates, and market-open status. Read-only — the loop itself "
+            "is CLI-driven."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "Optional symbol filter; omit for the active session"},
+            },
+        },
+    },
+    {
+        "name": "rt_session_history",
+        "description": "Recent per-step records from the live intraday session (prediction-before-event, realized reward, online-update stats). Visualizable via `visualize_training` equity/reward charts.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string"},
+                "limit": {"type": "integer", "default": 50, "minimum": 1, "maximum": 500},
+            },
+        },
+    },
 ]
 
 

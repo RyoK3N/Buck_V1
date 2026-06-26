@@ -55,6 +55,18 @@ class Settings(BaseSettings):
     mcp_http_port: int = Field(8765, env="MCP_HTTP_PORT")
     mount_mcp_in_api: bool = Field(False, env="MOUNT_MCP_IN_API")
 
+    # --- Context engineering (headroom compression layer) -------------------
+    headroom_enabled: bool = Field(True, env="HEADROOM_ENABLED")
+    # USD price per 1M tokens, used to estimate cost saved by compression.
+    # Default tracks Claude Opus input pricing; override per deployment/model.
+    headroom_price_per_mtok: float = Field(15.0, env="HEADROOM_PRICE_PER_MTOK")
+    headroom_cache_ttl: float = Field(300.0, env="HEADROOM_CACHE_TTL")
+    headroom_cache_maxsize: int = Field(256, env="HEADROOM_CACHE_MAXSIZE")
+
+    # --- Real-time intraday simulation --------------------------------------
+    rt_poll_seconds: float = Field(30.0, env="RT_POLL_SECONDS")
+    rt_online_update_every: int = Field(4, env="RT_ONLINE_UPDATE_EVERY")
+
     # --- Logging ------------------------------------------------------------
     log_level: str = "INFO"
 

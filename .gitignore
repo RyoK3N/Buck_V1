@@ -26,5 +26,9 @@ output/*
 tools/rl/weights/*
 !tools/rl/weights/.gitkeep
 
+# Training-session run artifacts (keep the dir, ignore the JSON dumps)
+tools/rl/sessions/*
+!tools/rl/sessions/.gitkeep
+
 # Build/Visualizer artifacts
 buck_visualizer/data-viz/
