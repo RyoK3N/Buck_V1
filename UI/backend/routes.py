@@ -7,6 +7,7 @@ FastAPI route handlers for all Buck endpoints.
 from __future__ import annotations
 import logging
 import os
+import re
 import traceback
 from typing import Any, Dict
 
@@ -38,6 +39,17 @@ router = APIRouter()
 
 VALID_INTERVALS = ["1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h",
                    "1d", "5d", "1wk", "1mo", "3mo"]
+
+
+_SYMBOL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,19}$")
+
+
+def _validated_symbol(symbol: str) -> str:
+    """Validate and normalize stock ticker symbol from user input."""
+    normalized = (symbol or "").strip().upper()
+    if not _SYMBOL_RE.fullmatch(normalized):
+        raise HTTPException(status_code=400, detail="Invalid symbol format")
+    return normalized
 
 
 def _make_buck(req: AnalyzeRequest | BatchRequest):
@@ -116,11 +128,12 @@ async def analyze(req: AnalyzeRequest) -> Dict[str, Any]:
     if req.indian_api_key:
         os.environ["INDIAN_API_KEY"] = req.indian_api_key
 
-    logger.info("POST /analyze  symbol=%s  selected_tools=%s", req.symbol, req.selected_tools)
+    symbol = _validated_symbol(req.symbol)
+    logger.info("POST /analyze  symbol=%s  selected_tools=%s", symbol, req.selected_tools)
     try:
         buck = _make_buck(req)
         result = await buck.analyze_and_predict(
-            symbol=req.symbol,
+            symbol=symbol,
             start_date=req.start_date,
             end_date=req.end_date,
             interval=req.interval,
