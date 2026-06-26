@@ -7,6 +7,7 @@ Our Agent Buck that orchestrates data collection, analysis, and prediction.
 from __future__ import annotations
 import asyncio
 import json
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -294,6 +295,15 @@ class Buck:
             raise ValueError(f"Unsafe output path generated: {candidate}") from exc
         return candidate
 
+    def _build_safe_results_filename(self, symbol: str, timestamp: str, kind: str) -> str:
+        """Construct and validate a strict results filename."""
+        safe_symbol = self._sanitize_filename_component(symbol)
+        safe_kind = "forecast" if kind == "forecast" else "analysis"
+        filename = f"{safe_symbol}_{timestamp}_{safe_kind}.json"
+        if not re.fullmatch(r"[A-Za-z0-9_-]+_[0-9]{8}_[0-9]{6}_(analysis|forecast)\.json", filename):
+            raise ValueError(f"Unsafe filename generated: {filename}")
+        return filename
+
     async def _save_results(self, results: Dict[str, Any]) -> None:
         """Save analysis results to files."""
         try:
@@ -305,13 +315,15 @@ class Buck:
             output_dir.mkdir(parents=True, exist_ok=True)
             
             # Save complete results
-            results_file = self._safe_output_path(output_dir, f"{symbol}_{timestamp}_analysis.json")
+            analysis_name = self._build_safe_results_filename(symbol, timestamp, "analysis")
+            results_file = self._safe_output_path(output_dir, analysis_name)
             with results_file.open('w') as f:
                 json.dump(results, f, indent=2, default=str)
             
             # Save forecast separately
             if 'forecast' in results:
-                forecast_file = self._safe_output_path(output_dir, f"{symbol}_{timestamp}_forecast.json")
+                forecast_name = self._build_safe_results_filename(symbol, timestamp, "forecast")
+                forecast_file = self._safe_output_path(output_dir, forecast_name)
                 with forecast_file.open('w') as f:
                     json.dump(results['forecast'], f, indent=2, default=str)
             
