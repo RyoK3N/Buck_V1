@@ -271,24 +271,32 @@ class Buck:
         
         return forecast
     
+    def _sanitize_filename_component(self, value: str) -> str:
+        """Sanitize untrusted text so it is safe to use in a file name."""
+        safe = "".join(c if c.isalnum() or c in ("_", "-", ".") else "_" for c in str(value))
+        safe = safe.strip("._")
+        return safe or "unknown_symbol"
+
     async def _save_results(self, results: Dict[str, Any]) -> None:
         """Save analysis results to files."""
         try:
-            symbol = results['symbol']
+            symbol = self._sanitize_filename_component(results['symbol'])
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             
             # Create output directory from settings
-            output_dir = Path(SETTINGS.output_dir)
-            output_dir.mkdir(exist_ok=True)
+            output_dir = Path(SETTINGS.output_dir).resolve()
+            output_dir.mkdir(parents=True, exist_ok=True)
             
             # Save complete results
-            results_file = output_dir / f"{symbol}_{timestamp}_analysis.json"
+            results_file = (output_dir / f"{symbol}_{timestamp}_analysis.json").resolve()
+            results_file.relative_to(output_dir)
             with results_file.open('w') as f:
                 json.dump(results, f, indent=2, default=str)
             
             # Save forecast separately
             if 'forecast' in results:
-                forecast_file = output_dir / f"{symbol}_{timestamp}_forecast.json"
+                forecast_file = (output_dir / f"{symbol}_{timestamp}_forecast.json").resolve()
+                forecast_file.relative_to(output_dir)
                 with forecast_file.open('w') as f:
                     json.dump(results['forecast'], f, indent=2, default=str)
             
