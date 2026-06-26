@@ -17,25 +17,43 @@ echo ""
 
 # 0. Pick a single Python interpreter and use it for everything (install,
 #    verification, and the command written into Claude Desktop's config).
-#    Prefer an active virtualenv, else fall back to python3.
+#
+#    Priority:
+#      1. An already-active virtualenv  (VIRTUAL_ENV)
+#      2. An already-active *named* conda env (not base)
+#      3. A project-local virtualenv at ./.venv (created if missing)
+#
+#    We avoid installing into a Homebrew / system / conda-base interpreter,
+#    which is "externally managed" (PEP 668) and refuses `pip install`.
 if [ -n "${VIRTUAL_ENV:-}" ] && [ -x "$VIRTUAL_ENV/bin/python" ]; then
   PYTHON="$VIRTUAL_ENV/bin/python"
-elif command -v python3 >/dev/null 2>&1; then
-  PYTHON="$(command -v python3)"
+  echo "→ Using active virtualenv: $VIRTUAL_ENV"
+elif [ -n "${CONDA_PREFIX:-}" ] && [ "${CONDA_DEFAULT_ENV:-}" != "base" ] && [ -x "$CONDA_PREFIX/bin/python" ]; then
+  PYTHON="$CONDA_PREFIX/bin/python"
+  echo "→ Using active conda env: ${CONDA_DEFAULT_ENV:-?} ($CONDA_PREFIX)"
 else
-  echo "✗ Could not find python3 on PATH. Install Python 3 and re-run." >&2
-  exit 1
+  VENV_DIR="$BUCK_DIR/.venv"
+  if [ ! -x "$VENV_DIR/bin/python" ]; then
+    BASE_PY="$(command -v python3 || true)"
+    if [ -z "$BASE_PY" ]; then
+      echo "✗ Could not find python3 to create a virtualenv. Install Python 3 and re-run." >&2
+      exit 1
+    fi
+    echo "→ No dedicated environment active — creating project virtualenv at .venv"
+    "$BASE_PY" -m venv "$VENV_DIR"
+  else
+    echo "→ Reusing existing project virtualenv: $VENV_DIR"
+  fi
+  PYTHON="$VENV_DIR/bin/python"
 fi
 # Resolve to an absolute path so Claude Desktop can launch it regardless of PATH.
 PYTHON="$("$PYTHON" -c 'import sys; print(sys.executable)')"
-echo "→ Using Python: $PYTHON"
-if [ -z "${VIRTUAL_ENV:-}" ]; then
-  echo "  (no virtualenv active — installing into this interpreter's environment)"
-fi
+echo "  Python: $PYTHON"
 echo ""
 
 # 1. Install Python dependencies (use the same interpreter, not a stray pip).
 echo "→ Installing Python dependencies..."
+"$PYTHON" -m pip install --upgrade pip --quiet
 "$PYTHON" -m pip install -r "$BUCK_DIR/requirements.txt" --quiet
 echo "  ✓ Dependencies installed"
 echo ""
