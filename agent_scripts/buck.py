@@ -273,15 +273,23 @@ class Buck:
     
     def _sanitize_filename_component(self, value: str) -> str:
         """Sanitize untrusted text so it is safe to use in a file name."""
-        safe = "".join(c if c.isalnum() or c in ("_", "-", ".") else "_" for c in str(value))
-        safe = safe.strip("._")
+        raw = str(value)
+        safe = "".join(c if c.isalnum() or c in ("_", "-") else "_" for c in raw)
+
+        # Collapse repeated separators to keep filenames predictable.
+        while "__" in safe:
+            safe = safe.replace("__", "_")
+
+        safe = safe.strip("_-")
         return safe or "unknown_symbol"
 
     def _safe_output_path(self, output_dir: Path, filename: str) -> Path:
         """Build and validate an output path is contained within output_dir."""
-        candidate = (output_dir / filename).resolve()
+        base_dir = output_dir.resolve()
+        safe_name = self._sanitize_filename_component(filename)
+        candidate = (base_dir / safe_name).resolve()
         try:
-            candidate.relative_to(output_dir)
+            candidate.relative_to(base_dir)
         except ValueError as exc:
             raise ValueError(f"Unsafe output path generated: {candidate}") from exc
         return candidate
