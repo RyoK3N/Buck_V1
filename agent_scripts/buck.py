@@ -119,11 +119,11 @@ class Buck:
             return results
             
         except Exception as e:
-            LOGGER.error(f"Analysis and prediction failed for {symbol}: {e}")
+            LOGGER.exception("Analysis and prediction failed for %s", symbol)
             return {
                 'symbol': symbol,
                 'timestamp': datetime.now().isoformat(),
-                'error': str(e),
+                'error': 'An internal error occurred.',
                 'status': 'failed'
             }
     
