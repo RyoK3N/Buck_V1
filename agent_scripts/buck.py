@@ -277,6 +277,15 @@ class Buck:
         safe = safe.strip("._")
         return safe or "unknown_symbol"
 
+    def _safe_output_path(self, output_dir: Path, filename: str) -> Path:
+        """Build and validate an output path is contained within output_dir."""
+        candidate = (output_dir / filename).resolve()
+        try:
+            candidate.relative_to(output_dir)
+        except ValueError as exc:
+            raise ValueError(f"Unsafe output path generated: {candidate}") from exc
+        return candidate
+
     async def _save_results(self, results: Dict[str, Any]) -> None:
         """Save analysis results to files."""
         try:
@@ -288,15 +297,13 @@ class Buck:
             output_dir.mkdir(parents=True, exist_ok=True)
             
             # Save complete results
-            results_file = (output_dir / f"{symbol}_{timestamp}_analysis.json").resolve()
-            results_file.relative_to(output_dir)
+            results_file = self._safe_output_path(output_dir, f"{symbol}_{timestamp}_analysis.json")
             with results_file.open('w') as f:
                 json.dump(results, f, indent=2, default=str)
             
             # Save forecast separately
             if 'forecast' in results:
-                forecast_file = (output_dir / f"{symbol}_{timestamp}_forecast.json").resolve()
-                forecast_file.relative_to(output_dir)
+                forecast_file = self._safe_output_path(output_dir, f"{symbol}_{timestamp}_forecast.json")
                 with forecast_file.open('w') as f:
                     json.dump(results['forecast'], f, indent=2, default=str)
             
