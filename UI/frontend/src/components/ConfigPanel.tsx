@@ -12,10 +12,23 @@ const DEFAULTS: Config = {
   base_url: '',
 }
 
+function toStoredConfig(cfg: Config): Pick<Config, 'model' | 'base_url'> {
+  return {
+    model: cfg.model,
+    base_url: cfg.base_url,
+  }
+}
+
 function load(): Config {
   try {
     const s = sessionStorage.getItem(SESSION_KEY)
-    return s ? (JSON.parse(s) as Config) : { ...DEFAULTS }
+    if (!s) return { ...DEFAULTS }
+    const stored = JSON.parse(s) as Partial<Config>
+    return {
+      ...DEFAULTS,
+      model: stored.model || DEFAULTS.model,
+      base_url: stored.base_url || '',
+    }
   } catch {
     return { ...DEFAULTS }
   }
@@ -47,7 +60,7 @@ export default function ConfigPanel({ onChange }: Props) {
             model:          server.chat_model     || DEFAULTS.model,
             base_url:       server.openai_base_url || '',
           }
-          sessionStorage.setItem(SESSION_KEY, JSON.stringify(merged))
+          sessionStorage.setItem(SESSION_KEY, JSON.stringify(toStoredConfig(merged)))
           sessionStorage.setItem(LOADED_FLAG, '1')
           setCfg(merged)
         }
@@ -58,7 +71,7 @@ export default function ConfigPanel({ onChange }: Props) {
 
   // Notify parent whenever cfg changes
   useEffect(() => {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(cfg))
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(toStoredConfig(cfg)))
     onChangeRef.current(cfg)
   }, [cfg])
 
