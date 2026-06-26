@@ -307,7 +307,9 @@ class Buck:
     async def _save_results(self, results: Dict[str, Any]) -> None:
         """Save analysis results to files."""
         try:
-            symbol = self._sanitize_filename_component(results['symbol'])
+            # Use a trusted server-side identifier for filenames to avoid
+            # user-influenced path construction.
+            symbol = "analysis"
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             
             # Create output directory from settings
