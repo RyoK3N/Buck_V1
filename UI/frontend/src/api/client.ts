@@ -288,3 +288,85 @@ export async function invokeMCPTool(tool: string, args: Record<string, unknown> 
   const { data } = await http.post('/mcp/invoke', { tool, args })
   return data
 }
+
+// ── Realtime intraday session (monitor + run controls) ────────────────────────
+
+export interface RTStatus {
+  active: boolean
+  running: boolean
+  symbol?: string | null
+  model_id?: string | null
+  status?: string | null
+  market_open?: boolean | null
+  replay?: boolean | null
+  started_at?: string | null
+  updated_at?: string | null
+  capital?: number | null
+  equity?: number | null
+  intraday_pnl?: number | null
+  intraday_pnl_pct?: number | null
+  last_action?: number | null
+  last_signal?: string | null
+  last_price?: number | null
+  n_steps?: number | null
+  n_updates?: number | null
+  error?: string | null
+  reason?: string | null
+}
+
+export interface RTStep {
+  ts?: string
+  price?: number
+  target_position?: number
+  signal?: string
+  realized_return?: number
+  bar_return?: number
+  equity?: number
+  [k: string]: unknown
+}
+
+export interface RTStartBody {
+  symbol: string
+  model_id: string
+  interval?: string
+  replay?: boolean
+  replay_start?: string
+  replay_end?: string
+  capital?: number
+  max_steps?: number
+  indian_api_key?: string
+}
+
+export async function getRealtimeStatus(symbol?: string): Promise<RTStatus> {
+  const { data } = await http.get<RTStatus>('/rt/status', { params: symbol ? { symbol } : {} })
+  return data
+}
+
+export async function getRealtimeHistory(symbol?: string, limit = 100): Promise<RTStep[]> {
+  const { data } = await http.get<{ symbol: string | null; steps: RTStep[] }>('/rt/history', {
+    params: { ...(symbol ? { symbol } : {}), limit },
+  })
+  return data.steps
+}
+
+export async function getRealtimeSessions(): Promise<RTStatus[]> {
+  const { data } = await http.get<{ sessions: RTStatus[] }>('/rt/sessions')
+  return data.sessions
+}
+
+export async function getRealtimeChart(symbol: string | undefined, chart: string): Promise<{ spec: D3Spec; active: boolean; chart: string }> {
+  const { data } = await http.get<{ spec: D3Spec; active: boolean; chart: string }>('/rt/chart', {
+    params: { ...(symbol ? { symbol } : {}), chart },
+  })
+  return data
+}
+
+export async function startRealtime(body: RTStartBody): Promise<RTStatus> {
+  const { data } = await http.post<RTStatus>('/rt/start', body)
+  return data
+}
+
+export async function stopRealtime(symbol: string): Promise<RTStatus> {
+  const { data } = await http.post<RTStatus>('/rt/stop', { symbol })
+  return data
+}

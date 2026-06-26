@@ -24,6 +24,8 @@ compression is off/unavailable, ``data`` is the original dict unchanged.
 
 from __future__ import annotations
 
+import functools
+import inspect
 import json
 from typing import Any, Awaitable, Callable, Dict, Optional
 
@@ -49,6 +51,8 @@ READ_ONLY_TOOLS = {
     "get_prediction_accuracy",
     "list_recent_predictions",
     "compare_predictions_vs_actual",
+    "visualize_accuracy",
+    "visualize_predictions",
     "headroom_stats",
     "list_training_sessions",
     "list_d3_chart_types",
@@ -65,6 +69,7 @@ DATA_FETCH_TOOLS = {
     "rl_simulate",
     "rl_ensemble_predict",
     "visualize",
+    "visualize_compare",
 }
 
 # Tools whose results must never be cached (stateful / mutating).
@@ -112,6 +117,7 @@ def wrap_tool(name: str, impl: ToolImpl) -> ToolImpl:
     cacheable = name in READ_ONLY_TOOLS and name not in NEVER_CACHE
     rate_limited = name in DATA_FETCH_TOOLS
 
+    @functools.wraps(impl)
     async def _wrapped(**kwargs: Any) -> Dict[str, Any]:
         args = dict(kwargs)
 
@@ -164,8 +170,30 @@ def wrap_tool(name: str, impl: ToolImpl) -> ToolImpl:
             _CACHE.set(key, envelope)
         return envelope
 
-    _wrapped.__name__ = getattr(impl, "__name__", name)
-    _wrapped.__doc__ = getattr(impl, "__doc__", None)
+    # CRITICAL: expose the original impl's signature so FastMCP builds the real
+    # input schema (symbol, start_date, …) instead of a single opaque `kwargs`
+    # field. The wrapper keeps its **kwargs body, so FastMCP can still call it
+    # with the validated arguments.
+    #
+    # The impls use `from __future__ import annotations`, so their annotations are
+    # PEP 563 *strings*. We resolve them to real type objects in the impl's own
+    # module namespace (eval_str=True) and pin both __signature__ and
+    # __annotations__ — otherwise FastMCP would try to eval those strings in this
+    # middleware module's globals (which lack `List`, etc.) and fail to build the
+    # pydantic argument model.
+    try:
+        sig = inspect.signature(impl, eval_str=True)
+    except (ValueError, TypeError, NameError):
+        sig = inspect.signature(impl)
+    _wrapped.__signature__ = sig  # type: ignore[attr-defined]
+    resolved = {
+        p_name: p.annotation
+        for p_name, p in sig.parameters.items()
+        if p.annotation is not inspect.Parameter.empty
+    }
+    if sig.return_annotation is not inspect.Signature.empty:
+        resolved["return"] = sig.return_annotation
+    _wrapped.__annotations__ = resolved
     return _wrapped
 
 

@@ -224,6 +224,98 @@ async def visualize(
     }
 
 
+async def visualize_accuracy(
+    model: Optional[str] = None,
+    symbol: Optional[str] = None,
+    window_days: int = 30,
+    metric: str = "mae",
+) -> Dict[str, Any]:
+    """d3 spec of rolling accuracy (MAE or directional accuracy) per model over time."""
+    from accuracy.repository import timeseries
+    from UI.backend.d3_viz import build_accuracy_spec
+    rows = timeseries(model=model, symbol=symbol, window_days=window_days)
+    return {
+        "metric": metric,
+        "window_days": window_days,
+        "spec": build_accuracy_spec(rows, metric=metric),
+    }
+
+
+async def visualize_predictions(
+    symbol: str,
+    lookback_days: int = 30,
+    model: Optional[str] = None,
+) -> Dict[str, Any]:
+    """d3 spec of predicted-vs-actual close for a symbol over a lookback window."""
+    from UI.backend.d3_viz import build_predictions_spec
+    data = await compare_predictions_vs_actual(symbol=symbol, lookback_days=lookback_days, model=model)
+    return {
+        "symbol": symbol,
+        "lookback_days": lookback_days,
+        "spec": build_predictions_spec(symbol, data.get("series", [])),
+    }
+
+
+async def visualize_compare(
+    symbols: List[str],
+    start_date: str,
+    end_date: str,
+    interval: str = "1d",
+    normalize: bool = True,
+    indian_api_key: Optional[str] = None,
+) -> Dict[str, Any]:
+    """d3 spec overlaying multiple symbols' price series (rebased to 100 by default)."""
+    from UI.backend.visualizer import fetch_df
+    from UI.backend.d3_viz import build_compare_spec
+    key = indian_api_key or os.environ.get("INDIAN_API_KEY", "")
+    series: List[Dict[str, Any]] = []
+    errors: Dict[str, str] = {}
+    for sym in symbols:
+        try:
+            df = await fetch_df(symbol=sym, start_date=start_date, end_date=end_date,
+                                interval=interval, indian_api_key=key)
+            points = [
+                {"date": str(idx), "value": float(row["Close"])}
+                for idx, row in df.iterrows()
+                if row.get("Close") is not None
+            ]
+            series.append({"symbol": sym, "points": points})
+        except Exception as exc:  # noqa: BLE001
+            errors[sym] = str(exc)
+    return {
+        "symbols": symbols,
+        "normalized": normalize,
+        "errors": errors,
+        "spec": build_compare_spec(series, normalized=normalize),
+    }
+
+
+async def visualize_session(
+    symbol: Optional[str] = None,
+    chart: str = "equity_curve",
+) -> Dict[str, Any]:
+    """d3 spec for a live realtime session (equity_curve / action_heatmap / drawdown_curve)."""
+    from realtime.state import get_status, get_history
+    from UI.backend.d3_viz import build_d3_spec
+    status = get_status(symbol)
+    steps = get_history(symbol, limit=500)
+    session = {
+        "session_id": status.get("symbol"),
+        "model_id": status.get("model_id"),
+        "symbol": status.get("symbol"),
+        "algorithm": "ppo_continuous_live",
+        "equity_curve": [{"portfolio_value": s["equity"]} for s in steps if "equity" in s],
+        "steps": steps,
+    }
+    return {
+        "symbol": status.get("symbol"),
+        "chart": chart,
+        "active": status.get("active", False),
+        "status": status,
+        "spec": build_d3_spec(chart, session),
+    }
+
+
 # ── Accuracy ────────────────────────────────────────────────────────────────
 
 async def get_prediction_accuracy(
@@ -349,6 +441,10 @@ _IMPLS: Dict[str, Callable[..., Awaitable[Dict[str, Any]]]] = {
     "list_rl_models": list_rl_models,
     "rl_ensemble_predict": rl_ensemble_predict,
     "visualize": visualize,
+    "visualize_accuracy": visualize_accuracy,
+    "visualize_predictions": visualize_predictions,
+    "visualize_compare": visualize_compare,
+    "visualize_session": visualize_session,
     "get_prediction_accuracy": get_prediction_accuracy,
     "list_recent_predictions": list_recent_predictions,
     "compare_predictions_vs_actual": compare_predictions_vs_actual,

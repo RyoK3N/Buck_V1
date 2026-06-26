@@ -55,6 +55,11 @@ from .models import (
     ClaudeChatRequest,
     ClaudeChatResponse,
     ToolUseTrace,
+    RTStartRequest,
+    RTStopRequest,
+    RTStatusResponse,
+    RTHistoryResponse,
+    RTSessionsResponse,
 )  # noqa: F401
 
 router = APIRouter()
@@ -964,3 +969,85 @@ async def rl_simulate(req: RLSimulateRequest) -> Dict[str, Any]:
     except Exception as exc:
         logger.error("RL simulate error: %s\n%s", exc, traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ── Realtime intraday session: monitor + run controls ──────────────────────────
+
+@router.get("/rt/status", response_model=RTStatusResponse)
+async def rt_status(symbol: str | None = None) -> RTStatusResponse:
+    """Current state of a realtime session (action / equity / PnL / step counts)."""
+    from realtime.runner import MANAGER
+    from realtime.state import get_status
+    if symbol:
+        return RTStatusResponse(**MANAGER.status(symbol))
+    return RTStatusResponse(**get_status(None))
+
+
+@router.get("/rt/history", response_model=RTHistoryResponse)
+async def rt_history(symbol: str | None = None, limit: int = 100) -> RTHistoryResponse:
+    """Recent per-step records from a realtime session (for the equity chart + table)."""
+    from realtime.state import get_history
+    return RTHistoryResponse(symbol=symbol, steps=get_history(symbol, limit=limit))
+
+
+@router.get("/rt/sessions", response_model=RTSessionsResponse)
+async def rt_sessions() -> RTSessionsResponse:
+    """List all sessions known to the run manager (running or recently finished)."""
+    from realtime.runner import MANAGER
+    return RTSessionsResponse(sessions=MANAGER.list_sessions())
+
+
+@router.get("/rt/chart")
+async def rt_chart(symbol: str | None = None, chart: str = "equity_curve") -> Dict[str, Any]:
+    """d3-buck spec for a realtime session (equity_curve / action_heatmap / drawdown_curve)."""
+    from realtime.state import get_status, get_history
+    from .d3_viz import build_d3_spec
+    status = get_status(symbol)
+    steps = get_history(symbol, limit=500)
+    session = {
+        "session_id": status.get("symbol"),
+        "model_id": status.get("model_id"),
+        "symbol": status.get("symbol"),
+        "algorithm": "ppo_continuous_live",
+        "equity_curve": [{"portfolio_value": s["equity"]} for s in steps if "equity" in s],
+        "steps": steps,
+    }
+    return {"chart": chart, "active": status.get("active", False), "spec": build_d3_spec(chart, session)}
+
+
+@router.post("/rt/start", response_model=RTStatusResponse)
+async def rt_start(req: RTStartRequest) -> RTStatusResponse:
+    """Start a realtime simulation in a background thread (use replay for off-hours)."""
+    from realtime.runner import MANAGER
+    if req.indian_api_key:
+        os.environ["INDIAN_API_KEY"] = req.indian_api_key
+    logger.info("POST /rt/start  symbol=%s  model_id=%s  replay=%s", req.symbol, req.model_id, req.replay)
+    try:
+        status = MANAGER.start(
+            symbol=req.symbol,
+            model_id=req.model_id,
+            interval=req.interval,
+            replay=req.replay,
+            replay_start=req.replay_start,
+            replay_end=req.replay_end,
+            capital=req.capital,
+            max_steps=req.max_steps,
+            indian_api_key=req.indian_api_key or os.environ.get("INDIAN_API_KEY", ""),
+        )
+        return RTStatusResponse(**status)
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001
+        logger.error("rt_start error: %s\n%s", exc, traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/rt/stop", response_model=RTStatusResponse)
+async def rt_stop(req: RTStopRequest) -> RTStatusResponse:
+    """Request a running realtime session to finish at the next safe point."""
+    from realtime.runner import MANAGER
+    logger.info("POST /rt/stop  symbol=%s", req.symbol)
+    try:
+        return RTStatusResponse(**MANAGER.stop(req.symbol))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))

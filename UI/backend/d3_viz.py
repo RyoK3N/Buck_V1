@@ -310,3 +310,109 @@ def build_d3_spec(chart: str, session: Dict[str, Any]) -> Dict[str, Any]:
     if builder is None:
         return _empty(chart, f"unknown chart {chart!r}; valid: {sorted(_BUILDERS)}")
     return builder(session)
+
+
+# ── Standalone d3 specs for the accuracy / prediction / comparison viz tools ──
+# These don't come from a training session, so they live outside `_BUILDERS`.
+
+_PALETTE = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#0ea5e9", "#a855f7", "#ec4899", "#14b8a6"]
+
+
+def build_accuracy_spec(rows: List[Dict[str, Any]], metric: str = "mae") -> Dict[str, Any]:
+    """Per-day accuracy series (rolling MAE or directional accuracy) as a multiline,
+    one series per model. `rows` is the output of `accuracy.repository.timeseries`."""
+    if metric not in ("mae", "directional_accuracy"):
+        metric = "mae"
+    if not rows:
+        return _empty(f"accuracy_{metric}", "no evaluated predictions in window")
+    models = sorted({r.get("model", "?") for r in rows})
+    by_date: Dict[str, Dict[str, Any]] = {}
+    for r in rows:
+        date = r.get("date")
+        rec = by_date.setdefault(date, {"date": date})
+        val = r.get(metric)
+        rec[r.get("model", "?")] = round(float(val), 5) if val is not None else None
+    data = [by_date[d] for d in sorted(by_date)]
+    title = "Rolling MAE" if metric == "mae" else "Directional accuracy"
+    return {
+        "spec_version": SPEC_VERSION,
+        "chart": f"accuracy_{metric}",
+        "mark": "multiline",
+        "data": data,
+        "encoding": {
+            "x": {"field": "date", "type": "temporal", "title": "Date"},
+            "y": {"field": models[0], "type": "quantitative", "title": title},
+            "series": [
+                {"field": m, "label": m, "color": _PALETTE[i % len(_PALETTE)]}
+                for i, m in enumerate(models)
+            ],
+        },
+        "meta": {"metric": metric, "models": models, "n_points": len(data)},
+    }
+
+
+def build_predictions_spec(symbol: str, series: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Predicted-vs-actual close over time as a two-line multiline. `series` is the
+    output of the `compare_predictions_vs_actual` tool."""
+    if not series:
+        return _empty("predictions", f"no evaluated predictions for {symbol!r}")
+    data = [
+        {
+            "date": r.get("target_date"),
+            "predicted_close": r.get("predicted_close"),
+            "actual_close": r.get("actual_close"),
+            "model": r.get("model"),
+        }
+        for r in series
+        if r.get("actual_close") is not None
+    ]
+    return {
+        "spec_version": SPEC_VERSION,
+        "chart": "predictions_vs_actual",
+        "mark": "multiline",
+        "data": data,
+        "encoding": {
+            "x": {"field": "date", "type": "temporal", "title": "Target date"},
+            "y": {"field": "actual_close", "type": "quantitative", "title": "Close"},
+            "series": [
+                {"field": "predicted_close", "label": "Predicted", "color": "#6366f1"},
+                {"field": "actual_close", "label": "Actual", "color": "#10b981"},
+            ],
+        },
+        "meta": {"symbol": symbol, "n_points": len(data)},
+    }
+
+
+def build_compare_spec(series: List[Dict[str, Any]], *, normalized: bool = True) -> Dict[str, Any]:
+    """Multi-symbol overlay. `series` is [{"symbol": str, "points": [{"date","value"}]}].
+    When `normalized`, values are rebased to 100 at the first point of each symbol."""
+    series = [s for s in series if s.get("points")]
+    if not series:
+        return _empty("compare", "no price data for the requested symbols")
+    symbols = [s["symbol"] for s in series]
+    by_date: Dict[str, Dict[str, Any]] = {}
+    for s in series:
+        pts = s["points"]
+        base = pts[0]["value"] if (normalized and pts and pts[0]["value"]) else 1.0
+        for p in pts:
+            date = p["date"]
+            rec = by_date.setdefault(date, {"date": date})
+            v = p["value"]
+            rec[s["symbol"]] = round((v / base * 100.0) if normalized else v, 4) if v is not None else None
+    data = [by_date[d] for d in sorted(by_date)]
+    return {
+        "spec_version": SPEC_VERSION,
+        "chart": "compare",
+        "mark": "multiline",
+        "data": data,
+        "encoding": {
+            "x": {"field": "date", "type": "temporal", "title": "Date"},
+            "y": {"field": symbols[0], "type": "quantitative",
+                  "title": "Rebased to 100" if normalized else "Close"},
+            "series": [
+                {"field": sym, "label": sym, "color": _PALETTE[i % len(_PALETTE)]}
+                for i, sym in enumerate(symbols)
+            ],
+        },
+        "meta": {"symbols": symbols, "normalized": normalized, "n_points": len(data)},
+    }

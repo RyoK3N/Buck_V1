@@ -330,3 +330,57 @@ class ToolUseTrace(BaseModel):
 class ClaudeChatResponse(BaseModel):
     text: str
     trace: List[ToolUseTrace] = []
+
+
+# ── Realtime intraday session (monitor + run controls) ─────────────────────────
+
+class RTStartRequest(BaseModel):
+    symbol: str
+    model_id: str
+    interval: str = "1m"
+    replay: bool = False
+    replay_start: Optional[str] = None
+    replay_end: Optional[str] = None
+    capital: float = 100000.0
+    max_steps: int = 2000
+    indian_api_key: Optional[str] = None
+
+
+class RTStopRequest(BaseModel):
+    symbol: str
+
+
+class RTStatusResponse(BaseModel):
+    """Live session status; mirrors realtime.state.status_dict + manager flags.
+    Kept permissive (extra fields allowed) so backend changes don't break the UI."""
+    active: bool = False
+    running: bool = False
+    symbol: Optional[str] = None
+    model_id: Optional[str] = None
+    status: Optional[str] = None
+    market_open: Optional[bool] = None
+    replay: Optional[bool] = None
+    started_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    capital: Optional[float] = None
+    equity: Optional[float] = None
+    intraday_pnl: Optional[float] = None
+    intraday_pnl_pct: Optional[float] = None
+    last_action: Optional[float] = None
+    last_signal: Optional[str] = None
+    last_price: Optional[float] = None
+    n_steps: Optional[int] = None
+    n_updates: Optional[int] = None
+    error: Optional[str] = None
+    reason: Optional[str] = None
+
+    model_config = {"extra": "allow"}
+
+
+class RTHistoryResponse(BaseModel):
+    symbol: Optional[str] = None
+    steps: List[Dict[str, Any]] = []
+
+
+class RTSessionsResponse(BaseModel):
+    sessions: List[Dict[str, Any]] = []

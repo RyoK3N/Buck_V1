@@ -22,6 +22,7 @@ as a training session so it can be visualised through the d3 tools.
 
 from __future__ import annotations
 
+import threading
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterator, List, Optional
@@ -80,6 +81,13 @@ class IntradaySimulator:
         self.pos = 0.0           # current target-position fraction in [0, 1]
         self.equity = capital
         self._bars_since_update = 0
+        # Cooperative stop flag — set via request_stop() (e.g. from the REST layer)
+        # to end the loop gracefully at the next bar / poll boundary.
+        self._stop = threading.Event()
+
+    def request_stop(self) -> None:
+        """Ask the loop to finish at the next safe point (cooperative, thread-safe)."""
+        self._stop.set()
 
     # ── model ────────────────────────────────────────────────────────────────
     def _load_agent(self):
@@ -116,18 +124,23 @@ class IntradaySimulator:
 
         produced = 0
         while produced < self.max_steps:
+            if self._stop.is_set():
+                return
             if not is_market_open(exchange=self.exchange):
                 self.state.market_open = False
                 self.state.status = "waiting_market"
                 wait = min(self.poll_seconds * 4, max(30.0, time_until_next_open(exchange=self.exchange).total_seconds()))
                 print(f"⏳ {self.symbol}: market closed ({self.exchange}); sleeping {wait:.0f}s")
-                time.sleep(wait)
+                # Interruptible sleep so a stop request doesn't wait out the gate.
+                if self._stop.wait(timeout=wait):
+                    return
                 continue
             self.state.market_open = True
             tick = fetch_live_data(self.symbol, self.api_key)
             if tick is None:
                 print(f"⚠️  {self.symbol}: no live data this poll; retrying")
-                time.sleep(self.poll_seconds)
+                if self._stop.wait(timeout=self.poll_seconds):
+                    return
                 continue
             yield {
                 "timestamp": tick.get("timestamp", datetime.now(timezone.utc).isoformat()),
@@ -138,7 +151,8 @@ class IntradaySimulator:
                 "Volume": float(tick.get("volume", 0.0)),
             }
             produced += 1
-            time.sleep(self.poll_seconds)
+            if self._stop.wait(timeout=self.poll_seconds):
+                return
 
     def _bars(self) -> Iterator[Dict[str, Any]]:
         return self._replay_bars() if self.replay else self._live_bars()
@@ -204,6 +218,8 @@ class IntradaySimulator:
 
         try:
             for bar in self._bars():
+                if self._stop.is_set():
+                    break
                 self.df.loc[len(self.df)] = [bar["Open"], bar["High"], bar["Low"], bar["Close"], bar["Volume"]]
                 close = bar["Close"]
 

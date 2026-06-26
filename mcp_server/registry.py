@@ -214,6 +214,80 @@ BUCK_TOOLS: List[Dict[str, Any]] = [
             "required": ["symbol", "start_date", "end_date", "chart_type"],
         },
     },
+    {
+        "name": "visualize_accuracy",
+        "description": (
+            "Render rolling forecast accuracy over time as a d3 chart spec (d3-buck/1): one line "
+            "per model showing daily MAE or directional accuracy. Use this to see whether a model is "
+            "improving, drifting, or degrading. Pair with `get_prediction_accuracy` for point stats."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "model": {"type": "string", "description": "Optional model filter (openai, claude, ensemble)"},
+                "symbol": {"type": "string", "description": "Optional symbol filter"},
+                "window_days": {"type": "integer", "default": 30, "minimum": 1, "maximum": 365},
+                "metric": {"type": "string", "enum": ["mae", "directional_accuracy"], "default": "mae"},
+            },
+        },
+    },
+    {
+        "name": "visualize_predictions",
+        "description": (
+            "Render predicted-vs-actual close for a symbol over a lookback window as a d3 chart spec "
+            "(two lines: predicted and actual). Use this to visually inspect bias and tracking error "
+            "for a specific ticker."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbol": _SYMBOL,
+                "lookback_days": {"type": "integer", "default": 30, "minimum": 1, "maximum": 365},
+                "model": {"type": "string", "description": "Optional model filter"},
+            },
+            "required": ["symbol"],
+        },
+    },
+    {
+        "name": "visualize_compare",
+        "description": (
+            "Overlay multiple symbols' price series on one d3 chart (rebased to 100 by default) for "
+            "relative-performance comparison across peers or a watchlist. Returns a d3-buck/1 multiline spec."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbols": {"type": "array", "items": {"type": "string"}, "minItems": 1,
+                            "description": "Ticker symbols to overlay"},
+                "start_date": _DATE,
+                "end_date": _DATE,
+                "interval": {"type": "string", "default": "1d"},
+                "normalize": {"type": "boolean", "default": True,
+                              "description": "Rebase each series to 100 at its first point"},
+            },
+            "required": ["symbols", "start_date", "end_date"],
+        },
+    },
+    {
+        "name": "visualize_session",
+        "description": (
+            "Render the currently running realtime intraday session as a d3 chart spec — equity_curve, "
+            "action_heatmap (target position over time), or drawdown_curve. Use this to monitor a live "
+            "simulation Claude or the RL agent is driving. Returns {active, status, spec}; when no session "
+            "is running the spec is empty."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "Optional symbol; omit for the active session"},
+                "chart": {
+                    "type": "string",
+                    "enum": ["equity_curve", "action_heatmap", "drawdown_curve"],
+                    "default": "equity_curve",
+                },
+            },
+        },
+    },
     # ── Accuracy self-introspection (new) ───────────────────────────────────
     {
         "name": "get_prediction_accuracy",
