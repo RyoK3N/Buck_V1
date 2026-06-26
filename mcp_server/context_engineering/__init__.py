@@ -31,7 +31,7 @@ from __future__ import annotations
 
 from .cost_tracker import USAGE, UsageTracker
 from .compressor import compress_payload, headroom_available
-from .middleware import wrap_tool, READ_ONLY_TOOLS, DATA_FETCH_TOOLS
+from .middleware import wrap_tool, wrap_tool_for_mcp, READ_ONLY_TOOLS, DATA_FETCH_TOOLS
 
 __all__ = [
     "USAGE",
@@ -39,6 +39,7 @@ __all__ = [
     "compress_payload",
     "headroom_available",
     "wrap_tool",
+    "wrap_tool_for_mcp",
     "READ_ONLY_TOOLS",
     "DATA_FETCH_TOOLS",
 ]

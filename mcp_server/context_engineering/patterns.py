@@ -82,21 +82,41 @@ class CircuitBreaker:
             if self._eval_state() == self.OPEN:
                 raise CircuitOpenError(f"circuit {self.name!r} is open")
 
-    async def call_async(self, fn: Callable[..., Awaitable[T]], *args: Any, **kwargs: Any) -> T:
+    async def call_async(
+        self,
+        fn: Callable[..., Awaitable[T]],
+        *args: Any,
+        ignore_predicate: Optional[Callable[[BaseException], bool]] = None,
+        **kwargs: Any,
+    ) -> T:
         self._guard()
         try:
             result = await fn(*args, **kwargs)
-        except Exception:
+        except Exception as exc:
+            # A client/input error means the service is reachable and healthy —
+            # it just rejected the request. Don't count it against the breaker.
+            if ignore_predicate is not None and ignore_predicate(exc):
+                self._on_success()
+                raise
             self._on_failure()
             raise
         self._on_success()
         return result
 
-    def call(self, fn: Callable[..., T], *args: Any, **kwargs: Any) -> T:
+    def call(
+        self,
+        fn: Callable[..., T],
+        *args: Any,
+        ignore_predicate: Optional[Callable[[BaseException], bool]] = None,
+        **kwargs: Any,
+    ) -> T:
         self._guard()
         try:
             result = fn(*args, **kwargs)
-        except Exception:
+        except Exception as exc:
+            if ignore_predicate is not None and ignore_predicate(exc):
+                self._on_success()
+                raise
             self._on_failure()
             raise
         self._on_success()
@@ -156,11 +176,14 @@ async def retry_with_backoff(
     jitter: float = 0.1,
     retry_on: Tuple[type, ...] = (Exception,),
     no_retry_on: Tuple[type, ...] = (),
+    no_retry_predicate: Optional[Callable[[BaseException], bool]] = None,
     **kwargs: Any,
 ) -> T:
     """Call `fn` up to `attempts` times with exponential backoff + jitter.
 
-    `no_retry_on` exceptions (e.g. CircuitOpenError) are raised immediately.
+    `no_retry_on` exceptions (e.g. CircuitOpenError) are raised immediately, as
+    are exceptions for which `no_retry_predicate` returns True (e.g. 4xx client
+    errors that retrying can't fix).
     """
     last_exc: Optional[BaseException] = None
     for i in range(attempts):
@@ -169,6 +192,8 @@ async def retry_with_backoff(
         except no_retry_on:
             raise
         except retry_on as exc:  # noqa: BLE001
+            if no_retry_predicate is not None and no_retry_predicate(exc):
+                raise
             last_exc = exc
             if i == attempts - 1:
                 break

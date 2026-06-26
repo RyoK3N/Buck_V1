@@ -89,6 +89,21 @@ def _breaker_for(name: str) -> CircuitBreaker:
     return cb
 
 
+def _is_client_error(exc: BaseException) -> bool:
+    """True for non-transient *client* errors — bad input, not-found, validation.
+
+    These must NOT be retried (retrying can't fix them) and must NOT trip the
+    circuit breaker (the backend is healthy; it correctly rejected the request).
+    Only genuine transient/5xx/connection failures should do either.
+    """
+    # FastAPI / Starlette HTTPException carries a status_code; 4xx == client error.
+    status = getattr(exc, "status_code", None)
+    if isinstance(status, int):
+        return 400 <= status < 500
+    # Plain input/validation errors raised by tool impls.
+    return isinstance(exc, (ValueError, KeyError, TypeError))
+
+
 def _cache_key(name: str, args: Dict[str, Any]) -> str:
     try:
         return name + "|" + json.dumps(args, sort_keys=True, default=str)
@@ -146,7 +161,7 @@ def wrap_tool(name: str, impl: ToolImpl) -> ToolImpl:
         breaker = _breaker_for(name)
 
         async def _call() -> Dict[str, Any]:
-            return await breaker.call_async(impl, **args)
+            return await breaker.call_async(impl, ignore_predicate=_is_client_error, **args)
 
         result = await retry_with_backoff(
             _call,
@@ -154,6 +169,7 @@ def wrap_tool(name: str, impl: ToolImpl) -> ToolImpl:
             base_delay=0.3,
             max_delay=3.0,
             no_retry_on=(CircuitOpenError,),
+            no_retry_predicate=_is_client_error,
         )
 
         # 4) compress + 5) record
@@ -170,22 +186,29 @@ def wrap_tool(name: str, impl: ToolImpl) -> ToolImpl:
             _CACHE.set(key, envelope)
         return envelope
 
-    # CRITICAL: expose the original impl's signature so FastMCP builds the real
-    # input schema (symbol, start_date, …) instead of a single opaque `kwargs`
-    # field. The wrapper keeps its **kwargs body, so FastMCP can still call it
-    # with the validated arguments.
-    #
-    # The impls use `from __future__ import annotations`, so their annotations are
-    # PEP 563 *strings*. We resolve them to real type objects in the impl's own
-    # module namespace (eval_str=True) and pin both __signature__ and
-    # __annotations__ — otherwise FastMCP would try to eval those strings in this
-    # middleware module's globals (which lack `List`, etc.) and fail to build the
-    # pydantic argument model.
+    return _copy_impl_signature(_wrapped, impl)
+
+
+def _copy_impl_signature(wrapper: ToolImpl, impl: ToolImpl, *, return_annotation: Any = None) -> ToolImpl:
+    """Expose `impl`'s signature on `wrapper` so FastMCP builds the real input
+    schema (symbol, start_date, …) instead of a single opaque `kwargs` field.
+
+    The impls use `from __future__ import annotations`, so their annotations are
+    PEP 563 *strings*. We resolve them to real type objects in the impl's own
+    module namespace (eval_str=True) and pin both __signature__ and
+    __annotations__ — otherwise FastMCP would eval those strings in this module's
+    globals (which lack `List`, etc.) and fail to build the pydantic arg model.
+
+    `return_annotation` overrides the impl's return type — used by the MCP-facing
+    wrapper to declare `-> str` so FastMCP emits a single text block.
+    """
     try:
         sig = inspect.signature(impl, eval_str=True)
     except (ValueError, TypeError, NameError):
         sig = inspect.signature(impl)
-    _wrapped.__signature__ = sig  # type: ignore[attr-defined]
+    if return_annotation is not None:
+        sig = sig.replace(return_annotation=return_annotation)
+    wrapper.__signature__ = sig  # type: ignore[attr-defined]
     resolved = {
         p_name: p.annotation
         for p_name, p in sig.parameters.items()
@@ -193,8 +216,40 @@ def wrap_tool(name: str, impl: ToolImpl) -> ToolImpl:
     }
     if sig.return_annotation is not inspect.Signature.empty:
         resolved["return"] = sig.return_annotation
-    _wrapped.__annotations__ = resolved
-    return _wrapped
+    wrapper.__annotations__ = resolved
+    return wrapper
+
+
+def wrap_tool_for_mcp(name: str, impl: ToolImpl) -> Callable[..., Awaitable[str]]:
+    """MCP-facing wrapper: run the full middleware chain, then return a single
+    compact **string** instead of the `{_headroom, data}` envelope.
+
+    Why a string and not the dict envelope:
+      * FastMCP serialises a dict result TWICE — as an indented text block AND as
+        `structuredContent` — so the payload (and the verbose `_headroom` block)
+        would cross the wire twice and the text copy would be pretty-printed,
+        cancelling headroom's savings.
+      * Returning `str` makes FastMCP emit ONE text content block, with no
+        `structuredContent` duplication and no indentation — so the compressed
+        (or compact-JSON) payload is exactly what Claude consumes.
+
+    Token/cost accounting still happens inside the chain (USAGE), queryable via
+    `headroom_stats`; the REST/internal path keeps the structured envelope.
+    """
+    base = wrap_tool(name, impl)
+
+    @functools.wraps(impl)
+    async def _mcp(**kwargs: Any) -> str:
+        env = await base(**kwargs)
+        data = env.get("data", env) if isinstance(env, dict) else env
+        if isinstance(data, str):
+            return data  # already compressed/compact text
+        try:
+            return json.dumps(data, default=str, ensure_ascii=False, separators=(",", ":"))
+        except Exception:  # noqa: BLE001
+            return str(data)
+
+    return _copy_impl_signature(_mcp, impl, return_annotation=str)
 
 
 def cache_stats() -> Dict[str, Any]:

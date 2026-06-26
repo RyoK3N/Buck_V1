@@ -467,12 +467,31 @@ _WRAPPED: Dict[str, Callable[..., Awaitable[Dict[str, Any]]]] = {}
 
 
 def get_wrapped(name: str) -> Callable[..., Awaitable[Dict[str, Any]]]:
-    """Return the context-engineered wrapper for a tool, building it on first use."""
+    """Return the context-engineered wrapper for a tool, building it on first use.
+
+    Returns the structured ``{_headroom, data}`` envelope — used by the REST layer,
+    internal callers and tests.
+    """
     fn = _WRAPPED.get(name)
     if fn is None:
         from mcp_server.context_engineering import wrap_tool
         fn = wrap_tool(name, _IMPLS[name])
         _WRAPPED[name] = fn
+    return fn
+
+
+# MCP-facing wrappers return a compact string (single content block, no
+# structuredContent duplication) so headroom's compression actually reaches Claude.
+_MCP_WRAPPED: Dict[str, Callable[..., Awaitable[str]]] = {}
+
+
+def get_mcp_wrapped(name: str) -> Callable[..., Awaitable[str]]:
+    """Return the MCP-facing (string-returning) wrapper for a tool."""
+    fn = _MCP_WRAPPED.get(name)
+    if fn is None:
+        from mcp_server.context_engineering import wrap_tool_for_mcp
+        fn = wrap_tool_for_mcp(name, _IMPLS[name])
+        _MCP_WRAPPED[name] = fn
     return fn
 
 

@@ -19,7 +19,7 @@ from mcp_server.context_engineering.patterns import (
     retry_with_backoff,
 )
 from mcp_server.context_engineering.cost_tracker import UsageTracker
-from mcp_server.context_engineering.middleware import wrap_tool
+from mcp_server.context_engineering.middleware import wrap_tool, wrap_tool_for_mcp, _is_client_error
 
 
 # ── Circuit breaker ──────────────────────────────────────────────────────────
@@ -135,3 +135,63 @@ def test_wrap_tool_envelope_and_caching():
     env2 = asyncio.run(wrapped(x=3))
     assert env2["_headroom"]["cache"] is True
     assert calls["n"] == 1
+
+
+# ── Client-error resilience (4xx must not retry or trip the breaker) ───────────
+class _HTTPish(Exception):
+    def __init__(self, status_code, detail=""):
+        self.status_code = status_code
+        super().__init__(detail)
+
+
+def test_is_client_error_classification():
+    assert _is_client_error(_HTTPish(400)) is True
+    assert _is_client_error(_HTTPish(404)) is True
+    assert _is_client_error(_HTTPish(500)) is False
+    assert _is_client_error(ValueError("bad")) is True
+    assert _is_client_error(RuntimeError("transient")) is False
+
+
+def test_client_error_does_not_open_breaker_via_wrap_tool():
+    """Repeated 4xx errors must keep the breaker CLOSED so valid calls still work."""
+    state = {"mode": "err", "n": 0}
+
+    async def impl(**kwargs):
+        state["n"] += 1
+        if state["mode"] == "err":
+            raise _HTTPish(400, "needs at least 60 bars")
+        return {"ok": True}
+
+    # rl_train is a DATA_FETCH tool (rate-limited + breaker). Use its real name.
+    wrapped = wrap_tool("rl_train", impl)
+
+    for _ in range(8):
+        with pytest.raises(_HTTPish):
+            asyncio.run(wrapped(symbol="X"))
+    # client errors are not retried: exactly one impl call each (8 total), not 24
+    assert state["n"] == 8
+
+    # breaker stayed closed → a now-valid call succeeds instead of CircuitOpenError
+    state["mode"] = "ok"
+    env = asyncio.run(wrapped(symbol="X"))
+    assert env["data"]["ok"] is True
+
+
+# ── MCP-facing wrapper returns a compact string (no envelope) ─────────────────
+def test_wrap_tool_for_mcp_returns_compact_string():
+    async def impl(symbol: str, limit: int = 5):
+        return {"symbol": symbol, "rows": list(range(limit))}
+
+    mcp_fn = wrap_tool_for_mcp("list_recent_predictions", impl)
+    out = asyncio.run(mcp_fn(symbol="INFY.NS", limit=3))
+    assert isinstance(out, str)
+    # compact JSON (no spaces after separators), no _headroom envelope noise
+    assert "_headroom" not in out
+    assert ", " not in out and '": ' not in out
+    import json
+    assert json.loads(out) == {"symbol": "INFY.NS", "rows": [0, 1, 2]}
+
+    # signature is preserved for FastMCP schema generation
+    import inspect
+    params = inspect.signature(mcp_fn).parameters
+    assert set(params) == {"symbol", "limit"}

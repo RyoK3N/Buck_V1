@@ -15,7 +15,14 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 # Common parameter shapes reused across multiple tools
-_SYMBOL = {"type": "string", "description": "Ticker, e.g. 'BHEL.NS' (NSE) or 'AAPL'"}
+_SYMBOL = {
+    "type": "string",
+    "description": (
+        "NSE (Indian) ticker with the `.NS` suffix, e.g. 'RELIANCE.NS', 'TCS.NS', "
+        "'INFY.NS', 'HDFCBANK.NS', 'BHEL.NS'. Buck is NSE-only — US/global tickers "
+        "(AAPL, NVDA, …) are not supported."
+    ),
+}
 _DATE = {"type": "string", "description": "YYYY-MM-DD"}
 _INTERVAL = {
     "type": "string",
