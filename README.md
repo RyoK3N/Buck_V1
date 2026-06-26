@@ -218,14 +218,18 @@ Then restart Claude Desktop. To register it manually instead, add this to
 {
   "mcpServers": {
     "buck": {
-      "command": "/absolute/path/to/python3",
-      "args": ["-m", "mcp_server.runner", "--transport", "stdio"],
+      "command": "/absolute/path/to/Buck_V1/.venv/bin/python",
+      "args": ["/absolute/path/to/Buck_V1/mcp_server/runner.py", "--transport", "stdio"],
       "cwd": "/absolute/path/to/Buck_V1",
       "env": {}
     }
   }
 }
 ```
+
+> Point `command` at the **`.venv` Python** the installer created (it has Buck's
+> deps) and pass the runner's **absolute file path** — not `-m mcp_server.runner`,
+> which only resolves when the launcher's working directory is the repo root.
 
 API keys are read from the repo's `.env` (loaded automatically by the runner),
 so you don't need to put secrets in the Claude Desktop config. See

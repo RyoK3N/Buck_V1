@@ -39,6 +39,10 @@ tools/rl/sessions/*
 # Build/Visualizer artifacts
 buck_visualizer/data-viz/
 
+# Claude Desktop extension bundles (build output of claude_extension/build.sh)
+*.mcpb
+*.dxt
+
 # Documentation (kept local, not version-controlled)
 docs/
 

@@ -102,11 +102,18 @@ if os.path.exists(config_path):
 if not isinstance(config, dict):
     config = {}
 
-# The server reads API keys from .env (loaded by mcp_server.runner via an
-# absolute path), so we keep env empty and rely on cwd + .env.
+# Invoke the runner by its ABSOLUTE FILE PATH rather than `-m mcp_server.runner`.
+# `-m` only works if the launcher's cwd is the repo root, and Claude Desktop does
+# not reliably honour the `cwd` field — that caused "No module named 'mcp_server'".
+# runner.py injects the repo root into sys.path itself, so a direct path works
+# from any working directory.
+runner = os.path.join(buck_dir, "mcp_server", "runner.py")
+
+# The server reads API keys from the repo's .env (runner.py loads it via an
+# absolute path), so we keep env empty.
 config.setdefault("mcpServers", {})["buck"] = {
     "command": python_path,
-    "args": ["-m", "mcp_server.runner", "--transport", "stdio"],
+    "args": [runner, "--transport", "stdio"],
     "cwd": buck_dir,
     "env": {},
 }

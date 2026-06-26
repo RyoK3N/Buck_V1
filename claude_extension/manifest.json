@@ -1,0 +1,40 @@
+{
+  "dxt_version": "0.1",
+  "name": "buck",
+  "display_name": "Buck — Stock Analysis, RL & Accuracy",
+  "version": "1.0.0",
+  "description": "Exposes Buck's analysis, batch, RL lab, visualizer and prediction-accuracy operations as MCP tools for Claude Desktop.",
+  "long_description": "Buck is an AI-powered stock analysis and prediction toolkit. This extension wires Buck's MCP server into Claude Desktop so Claude can run single/batch analysis, train and query RL models, generate visualizations, and inspect live prediction accuracy. Bring your own Python environment (the repo's .venv) — point the two settings at your interpreter and checkout.",
+  "author": {
+    "name": "Reiyo"
+  },
+  "server": {
+    "type": "python",
+    "entry_point": "mcp_server/runner.py",
+    "mcp_config": {
+      "command": "${user_config.python_path}",
+      "args": [
+        "${user_config.buck_dir}/mcp_server/runner.py",
+        "--transport",
+        "stdio"
+      ],
+      "env": {}
+    }
+  },
+  "user_config": {
+    "python_path": {
+      "type": "string",
+      "title": "Python interpreter",
+      "description": "Absolute path to the Python that has Buck's dependencies installed. After running install_mcp.sh this is <Buck_V1>/.venv/bin/python",
+      "required": true
+    },
+    "buck_dir": {
+      "type": "directory",
+      "title": "Buck repo directory",
+      "description": "Absolute path to your Buck_V1 checkout (the folder containing mcp_server/ and .env)",
+      "required": true
+    }
+  },
+  "keywords": ["stocks", "finance", "reinforcement-learning", "analysis", "mcp"],
+  "license": "see repository LICENSE"
+}
