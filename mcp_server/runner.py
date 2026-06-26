@@ -7,8 +7,9 @@ Examples:
     # Claude Desktop (stdio)
     python -m mcp_server.runner --transport stdio
 
-    # HTTP/SSE for external clients
-    python -m mcp_server.runner --transport sse --host 0.0.0.0 --port 8765
+    # HTTP/SSE for external clients (bind 0.0.0.0 only when you really need
+    # to expose it beyond localhost, and put it behind auth/a reverse proxy)
+    python -m mcp_server.runner --transport sse --host 127.0.0.1 --port 8765
 """
 
 from __future__ import annotations
@@ -39,7 +40,7 @@ def _init_accuracy_db() -> None:
 def main() -> None:
     p = argparse.ArgumentParser(description="Buck MCP server")
     p.add_argument("--transport", choices=["stdio", "sse", "streamable-http"], default="stdio")
-    p.add_argument("--host", default="0.0.0.0")
+    p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8765)
     args = p.parse_args()
 

@@ -197,6 +197,41 @@ python main.py --backend-only     # skip frontend
 
 Press `Ctrl+C` to stop all servers.
 
+### Claude Desktop (MCP)
+
+Buck ships an MCP server that exposes its operations as tools for Claude Desktop.
+The easiest way to wire it up is the installer, which installs dependencies,
+bootstraps `.env`, verifies the server, and registers the `buck` connector in
+Claude Desktop's config (merging into any existing servers):
+
+```bash
+# Run from the repo root. Activate your virtualenv first if you use one —
+# the installer registers whichever interpreter is active.
+bash install_mcp.sh
+```
+
+Then restart Claude Desktop. To register it manually instead, add this to
+`~/Library/Application Support/Claude/claude_desktop_config.json` (use an
+**absolute** path to your Python and to the repo):
+
+```json
+{
+  "mcpServers": {
+    "buck": {
+      "command": "/absolute/path/to/python3",
+      "args": ["-m", "mcp_server.runner", "--transport", "stdio"],
+      "cwd": "/absolute/path/to/Buck_V1",
+      "env": {}
+    }
+  }
+}
+```
+
+API keys are read from the repo's `.env` (loaded automatically by the runner),
+so you don't need to put secrets in the Claude Desktop config. See
+[docs/CLAUDE_MCP.md](docs/CLAUDE_MCP.md) for the full tool surface and HTTP/SSE
+transport options.
+
 ---
 
 ## Configuration

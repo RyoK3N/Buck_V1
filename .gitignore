@@ -6,9 +6,10 @@
 *.py[cod]
 *$py.class
 
-# Environment files
+# Environment files — ignore real secrets, but keep the committed template
 .env
 .env.*
+!.env.example
 
 # ==============================================================================
 # Project Directories & Data
