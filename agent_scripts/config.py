@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     # processes and don't share in-memory state).
     buck_api_url: str = Field("http://localhost:8000", env="BUCK_API_URL")
     buck_ui_url: str = Field("http://localhost:5173", env="BUCK_UI_URL")
+    # When true, MCP realtime tools auto-launch `python main.py` if the web app
+    # isn't already running (set BUCK_AUTOSTART=0 to require a manual start).
+    buck_autostart: bool = Field(True, env="BUCK_AUTOSTART")
 
     # --- Context engineering (headroom compression layer) -------------------
     headroom_enabled: bool = Field(True, env="HEADROOM_ENABLED")

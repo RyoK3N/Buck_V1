@@ -16,8 +16,11 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
+import threading
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from .registry import BUCK_TOOLS_BY_NAME
@@ -68,13 +71,17 @@ class BuckAppUnavailable(RuntimeError):
 
 async def _api_request(method: str, path: str, *, params: Optional[Dict[str, Any]] = None,
                        json_body: Optional[Dict[str, Any]] = None, timeout: float = 15.0) -> Any:
-    """Call the running Buck web app. Raises BuckAppUnavailable if it's not up."""
+    """Call the running Buck web app. Raises BuckAppUnavailable if it's not up.
+
+    Uses a short (2s) CONNECT timeout so an absent app fails fast, with the longer
+    `timeout` applying only to reading the response of a connected request.
+    """
     import requests
 
     url = f"{_api_base()}{path}"
 
     def _do() -> Any:
-        resp = requests.request(method, url, params=params, json=json_body, timeout=timeout)
+        resp = requests.request(method, url, params=params, json=json_body, timeout=(2.0, timeout))
         if resp.status_code >= 400:
             try:
                 detail = resp.json().get("detail", resp.text)
@@ -88,8 +95,91 @@ async def _api_request(method: str, path: str, *, params: Optional[Dict[str, Any
     except requests.exceptions.RequestException as exc:
         raise BuckAppUnavailable(
             f"Could not reach the Buck web app at {_api_base()}. Start it with "
-            f"`python main.py` (and set BUCK_API_URL if it runs elsewhere). [{type(exc).__name__}]"
+            f"`python main.py` or the start_buck_app tool (set BUCK_API_URL if it runs "
+            f"elsewhere). [{type(exc).__name__}]"
         ) from exc
+
+
+# ── Web-app lifecycle (auto-start) ────────────────────────────────────────────
+# The MCP server runs from the repo root, so it can launch the web app itself
+# instead of forcing the user to run `python main.py` in a terminal first.
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+_APP_PROC = None          # the subprocess we launched (if any)
+_APP_LOCK = threading.Lock()
+
+
+def _autostart_enabled() -> bool:
+    val = os.environ.get("BUCK_AUTOSTART")
+    if val is not None:
+        return val.strip().lower() not in ("0", "false", "no", "off")
+    try:
+        from agent_scripts.config import SETTINGS
+        return bool(getattr(SETTINGS, "buck_autostart", True))
+    except Exception:
+        return True
+
+
+def _app_healthy(timeout: float = 1.5) -> bool:
+    import requests
+    try:
+        r = requests.get(f"{_api_base()}/health", timeout=(1.5, timeout))
+        return r.status_code == 200
+    except Exception:
+        return False
+
+
+def _launch_app(full_ui: bool) -> None:
+    """Spawn `python main.py` from the repo root, fully detached from the MCP
+    server's stdio (critical: this server speaks MCP over stdout/stdin)."""
+    global _APP_PROC
+    import subprocess
+    cmd = [sys.executable, "main.py", "--no-reload"]
+    if not full_ui:
+        cmd.append("--backend-only")
+    _APP_PROC = subprocess.Popen(
+        cmd,
+        cwd=str(_REPO_ROOT),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,  # own process group → survives, won't catch our signals
+    )
+
+
+def ensure_app_running(full_ui: bool = False, wait_seconds: float = 25.0) -> Dict[str, Any]:
+    """Ensure the Buck web app is reachable, auto-starting it if needed.
+
+    Returns {"healthy": bool, "started": bool, "api": url, "ui": url}. Raises
+    BuckAppUnavailable if it can't be brought up (and autostart is on)."""
+    import time as _time
+
+    if _app_healthy():
+        return {"healthy": True, "started": False, "api": _api_base(), "ui": _ui_base()}
+
+    if not _autostart_enabled():
+        raise BuckAppUnavailable(
+            f"The Buck web app isn't running at {_api_base()} and autostart is disabled "
+            f"(BUCK_AUTOSTART=0). Start it with `python main.py`."
+        )
+
+    with _APP_LOCK:
+        # Re-check inside the lock — another concurrent call may have started it.
+        if not _app_healthy():
+            global _APP_PROC
+            already = _APP_PROC is not None and _APP_PROC.poll() is None
+            if not already:
+                _launch_app(full_ui=full_ui)
+        deadline = _time.time() + wait_seconds
+        while _time.time() < deadline:
+            if _app_healthy():
+                return {"healthy": True, "started": True, "api": _api_base(), "ui": _ui_base()}
+            _time.sleep(1.0)
+
+    raise BuckAppUnavailable(
+        f"Started the Buck web app but it didn't become healthy at {_api_base()} within "
+        f"{wait_seconds:.0f}s. Check `python main.py` output / dependencies."
+    )
 
 
 # ── Tool implementations ─────────────────────────────────────────────────────
@@ -522,7 +612,12 @@ async def rt_start_session(
     and a trained `ppo_continuous` model. `speed` is the replay fast-forward factor
     (per-bar delay = bar_period/speed; 1=real-time, higher=faster, >=1000=instant).
     When `open_ui` is true, also opens the browser to the Realtime tab.
+    If the web app isn't running it is auto-started (unless BUCK_AUTOSTART=0).
     """
+    # Make sure the web app is up first (auto-start it if needed). Start the full
+    # stack when we're going to open the UI so there's a frontend to watch.
+    await asyncio.to_thread(ensure_app_running, open_ui)
+
     body = {
         "symbol": symbol,
         "model_id": model_id,
@@ -561,6 +656,13 @@ async def open_buck_ui(
     from urllib.parse import urlencode
     import webbrowser
 
+    # Make sure the full stack (incl. frontend) is up so the page actually loads.
+    app: Dict[str, Any] = {}
+    try:
+        app = await asyncio.to_thread(ensure_app_running, True)
+    except BuckAppUnavailable as exc:
+        app = {"healthy": False, "error": str(exc)}
+
     params: Dict[str, Any] = {"tab": tab}
     if symbol:
         params["symbol"] = symbol
@@ -575,8 +677,26 @@ async def open_buck_ui(
     return {
         "url": url,
         "opened": bool(opened),
+        "app": app,
         "note": "Open this URL in your browser to watch." if not opened else "Opened in your browser.",
     }
+
+
+async def start_buck_app(frontend: bool = True, wait_seconds: float = 30.0) -> Dict[str, Any]:
+    """Ensure the Buck web app (`python main.py`) is running, launching it from the
+    repo if needed. Most realtime tools auto-start it, but call this to bring it up
+    explicitly (e.g. before a batch of sessions). `frontend=True` also starts the UI."""
+    try:
+        return await asyncio.to_thread(ensure_app_running, frontend, wait_seconds)
+    except BuckAppUnavailable as exc:
+        return {"healthy": False, "started": False, "error": str(exc)}
+
+
+async def buck_app_status() -> Dict[str, Any]:
+    """Report whether the Buck web app is reachable, and the API/UI URLs."""
+    healthy = await asyncio.to_thread(_app_healthy)
+    return {"healthy": healthy, "api": _api_base(), "ui": _ui_base(),
+            "autostart": _autostart_enabled()}
 
 
 # ── Dispatcher ──────────────────────────────────────────────────────────────
@@ -613,6 +733,8 @@ _IMPLS: Dict[str, Callable[..., Awaitable[Dict[str, Any]]]] = {
     "rt_start_session": rt_start_session,
     "rt_stop_session": rt_stop_session,
     "open_buck_ui": open_buck_ui,
+    "start_buck_app": start_buck_app,
+    "buck_app_status": buck_app_status,
 }
 
 

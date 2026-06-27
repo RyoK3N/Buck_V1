@@ -467,11 +467,33 @@ BUCK_TOOLS: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "start_buck_app",
+        "description": (
+            "Ensure the Buck web app (`python main.py`) is running, launching it from the repo if needed "
+            "and waiting until it's healthy. Realtime tools auto-start it, but call this explicitly to "
+            "bring it up first (e.g. before firing several sessions). Set frontend=true to also start the UI."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "frontend": {"type": "boolean", "default": True,
+                              "description": "Also start the UI dev server so the browser page loads"},
+                "wait_seconds": {"type": "number", "default": 30.0,
+                                  "description": "How long to wait for the app to become healthy"},
+            },
+        },
+    },
+    {
+        "name": "buck_app_status",
+        "description": "Check whether the Buck web app is reachable; returns {healthy, api, ui, autostart}.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "open_buck_ui",
         "description": (
             "Open Buck's web UI in the user's browser, deep-linked to a tab (single, batch, visualizer, "
             "rl, realtime, training, claude) and optionally a symbol. Use this to let the user WATCH what "
-            "Buck is doing instead of only reading results in chat."
+            "Buck is doing instead of only reading results in chat. Auto-starts the app if it isn't running."
         ),
         "input_schema": {
             "type": "object",

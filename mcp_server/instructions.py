@@ -41,8 +41,11 @@ WHAT BUCK CAN DO (by category)
   • Realtime intraday sessions — a live online-learning loop you can START, WATCH
     and STOP. Sessions run inside the web app and show live in its Realtime tab.
       tools: rt_start_session, rt_stop_session, rt_session_status,
-             rt_session_history, visualize_session, open_buck_ui
-      (replay mode works any time; needs the web app running — `python main.py`.)
+             rt_session_history, visualize_session, open_buck_ui,
+             start_buck_app, buck_app_status
+      (replay mode works any time. The web app is auto-started on demand — the
+       first rt_start_session/open_buck_ui call may take ~15-25s while it boots;
+       set BUCK_AUTOSTART=0 to require a manual `python main.py`.)
   • Prediction accuracy — how well past forecasts held up; check before trusting one.
       tools: get_prediction_accuracy, list_recent_predictions, compare_predictions_vs_actual
   • Visualization — Plotly market charts + d3 specs for training/accuracy/comparison.
@@ -60,14 +63,15 @@ RECOMMENDED WORKFLOWS
        list_rl_models → rl_train (algorithm='ppo_continuous', episodes ≥ 200) →
        rl_predict (backtest over a date range) → rl_simulate (latest-snapshot
        signal) and/or rl_ensemble_predict → visualize_training to inspect the run.
-  3) Run a REPLAY simulation the user can WATCH in the web UI (needs the web app
-     running — `python main.py`):
+  3) Run a REPLAY simulation the user can WATCH in the web UI (the app auto-starts
+     if it isn't already running — the first call may take ~15-25s):
        (ensure a ppo_continuous model exists via list_rl_models, else rl_train) →
        rt_start_session(symbol, model_id, replay=True, replay_start, replay_end,
-       open_ui=True) — this starts the sim in the web app AND opens the browser to
-       the Realtime tab → poll rt_session_status / visualize_session to narrate
-       progress → rt_stop_session when done. Use open_buck_ui any time to let the
-       user watch a tab. The rt_* tools drive the SAME session the UI shows.
+       open_ui=True) — this auto-starts the app if needed, starts the sim, AND opens
+       the browser to the Realtime tab → poll rt_session_status / visualize_session
+       to narrate progress → rt_stop_session when done. Use start_buck_app once up
+       front if firing several sessions; open_buck_ui lets the user watch any tab.
+       The rt_* tools drive the SAME session the UI shows.
   4) Accuracy review:
        get_prediction_accuracy → list_recent_predictions →
        compare_predictions_vs_actual → visualize_accuracy / visualize_predictions.
@@ -130,7 +134,7 @@ def simulate_replay_prompt(
     )
     return (
         f"Run a REPLAY trading simulation for the NSE stock {symbol} that I can watch live in the Buck web UI.\n\n"
-        "Prerequisite: the Buck web app must be running (`python main.py`).\n\n"
+        "The web app auto-starts if it isn't running (the first call may take ~15-25s).\n\n"
         "Steps:\n"
         f"1. {model_line}\n"
         f"2. Call rt_start_session(symbol={symbol!r}, model_id=<model>, replay=true, "

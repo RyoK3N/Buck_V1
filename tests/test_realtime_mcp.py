@@ -17,8 +17,10 @@ from mcp_server.tools import BuckAppUnavailable
 @pytest.fixture
 def offline_api(monkeypatch):
     # Unreachable address → requests fails fast → BuckAppUnavailable / fallback.
+    # Disable autostart so tests never try to launch a real `python main.py`.
     monkeypatch.setenv("BUCK_API_URL", "http://127.0.0.1:9")
     monkeypatch.setenv("BUCK_UI_URL", "http://localhost:5173")
+    monkeypatch.setenv("BUCK_AUTOSTART", "0")
 
 
 def test_rt_status_falls_back_when_app_down(offline_api):
@@ -33,8 +35,43 @@ def test_rt_start_requires_running_app(offline_api):
         asyncio.run(T.rt_start_session(symbol="INFY.NS", model_id="m", open_ui=False))
 
 
+def test_buck_app_status_offline(offline_api):
+    out = asyncio.run(T.buck_app_status())
+    assert out["healthy"] is False
+    assert out["api"].startswith("http://127.0.0.1:9")
+
+
+def test_ensure_app_raises_when_autostart_disabled(offline_api, monkeypatch):
+    monkeypatch.setenv("BUCK_AUTOSTART", "0")
+    with pytest.raises(BuckAppUnavailable):
+        T.ensure_app_running(full_ui=False)
+
+
+def test_start_buck_app_returns_error_when_disabled(offline_api, monkeypatch):
+    monkeypatch.setenv("BUCK_AUTOSTART", "0")
+    out = asyncio.run(T.start_buck_app(frontend=False))
+    assert out["healthy"] is False and "error" in out
+
+
+def test_rt_start_autostart_disabled_fails_fast(offline_api, monkeypatch):
+    monkeypatch.setenv("BUCK_AUTOSTART", "0")
+    with pytest.raises(BuckAppUnavailable):
+        asyncio.run(T.rt_start_session(symbol="INFY.NS", model_id="m", open_ui=False))
+
+
+def test_ensure_app_healthy_shortcircuits(monkeypatch):
+    """If the app is already healthy, ensure_app_running must NOT try to launch."""
+    monkeypatch.setattr(T, "_app_healthy", lambda *a, **k: True)
+    launched = {"n": 0}
+    monkeypatch.setattr(T, "_launch_app", lambda full_ui: launched.__setitem__("n", launched["n"] + 1))
+    out = T.ensure_app_running(full_ui=True)
+    assert out["healthy"] is True and out["started"] is False
+    assert launched["n"] == 0
+
+
 def test_open_buck_ui_builds_deeplink(monkeypatch):
     monkeypatch.setenv("BUCK_UI_URL", "http://localhost:5173")
+    monkeypatch.setattr(T, "_app_healthy", lambda *a, **k: True)  # don't launch in tests
     captured = {}
 
     def fake_open(url):

@@ -345,6 +345,7 @@ def test_rl_ensemble_predict_mocked(monkeypatch):
 def offline_api(monkeypatch):
     monkeypatch.setenv("BUCK_API_URL", "http://127.0.0.1:9")
     monkeypatch.setenv("BUCK_UI_URL", "http://localhost:5173")
+    monkeypatch.setenv("BUCK_AUTOSTART", "0")  # never launch a real app in tests
 
 
 def test_rt_session_status_offline(offline_api):
@@ -369,6 +370,7 @@ def test_rt_stop_session_requires_app(offline_api):
 
 def test_open_buck_ui(monkeypatch):
     monkeypatch.setenv("BUCK_UI_URL", "http://localhost:5173")
+    monkeypatch.setattr(T, "_app_healthy", lambda *a, **k: True)  # don't launch in tests
     import webbrowser
     monkeypatch.setattr(webbrowser, "open", lambda url: True)
     out = run(T.open_buck_ui(tab="realtime", symbol="INFY.NS", autostart=True))
