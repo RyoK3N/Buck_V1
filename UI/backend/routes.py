@@ -1032,6 +1032,8 @@ async def rt_start(req: RTStartRequest) -> RTStatusResponse:
             replay_end=req.replay_end,
             capital=req.capital,
             max_steps=req.max_steps,
+            speed=req.speed,
+            online_update_every=req.online_update_every,
             indian_api_key=req.indian_api_key or os.environ.get("INDIAN_API_KEY", ""),
         )
         return RTStatusResponse(**status)

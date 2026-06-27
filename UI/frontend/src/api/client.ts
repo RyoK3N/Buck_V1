@@ -334,6 +334,8 @@ export interface RTStartBody {
   replay_end?: string
   capital?: number
   max_steps?: number
+  speed?: number
+  online_update_every?: number
   indian_api_key?: string
 }
 

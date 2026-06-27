@@ -24,6 +24,19 @@ from .patterns import CircuitBreaker, CircuitOpenError
 
 _BREAKER = CircuitBreaker(fail_max=3, reset_timeout=60.0, name="headroom")
 
+# Below this many estimated tokens, compression can't pay for itself (small JSON
+# results, per-bar realtime steps, …). We skip headroom entirely for such payloads
+# so the hot path never invokes headroom and the breaker is never exercised by them.
+_MIN_COMPRESS_TOKENS = 800
+
+
+def _min_tokens() -> int:
+    try:
+        from agent_scripts.config import SETTINGS
+        return int(getattr(SETTINGS, "headroom_min_tokens", _MIN_COMPRESS_TOKENS))
+    except Exception:
+        return _MIN_COMPRESS_TOKENS
+
 # Cached probe state. _OK is None until probed.
 _OK: Optional[bool] = None
 
@@ -119,6 +132,10 @@ def compress_payload(obj: Any, model: Optional[str] = None) -> Tuple[Any, dict]:
     def _passthrough(reason: str) -> Tuple[Any, dict]:
         return obj, {"tokens_raw": fallback_raw, "tokens_compressed": fallback_raw, "compressed": False, "reason": reason}
 
+    # Skip tiny payloads BEFORE touching headroom or its circuit breaker — they
+    # never gain from compression and would only add overhead / breaker exposure.
+    if fallback_raw < _min_tokens():
+        return _passthrough("too_small")
     if not _enabled():
         return _passthrough("disabled")
     if not _have_headroom():

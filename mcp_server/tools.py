@@ -35,6 +35,63 @@ def _record_call(name: str, ok: bool, latency_ms: float, error: Optional[str] = 
     }
 
 
+# ── Buck web-app client ──────────────────────────────────────────────────────
+# Realtime tools talk to the RUNNING FastAPI web app (not in-process state) so a
+# session Claude drives is the same one shown in the UI — they're separate
+# processes. The base URL comes from BUCK_API_URL (default http://localhost:8000).
+
+def _api_base() -> str:
+    base = os.environ.get("BUCK_API_URL")
+    if not base:
+        try:
+            from agent_scripts.config import SETTINGS
+            base = getattr(SETTINGS, "buck_api_url", "http://localhost:8000")
+        except Exception:
+            base = "http://localhost:8000"
+    return base.rstrip("/")
+
+
+def _ui_base() -> str:
+    base = os.environ.get("BUCK_UI_URL")
+    if not base:
+        try:
+            from agent_scripts.config import SETTINGS
+            base = getattr(SETTINGS, "buck_ui_url", "http://localhost:5173")
+        except Exception:
+            base = "http://localhost:5173"
+    return base.rstrip("/")
+
+
+class BuckAppUnavailable(RuntimeError):
+    """Raised when the Buck web app can't be reached — surfaced as a clear hint."""
+
+
+async def _api_request(method: str, path: str, *, params: Optional[Dict[str, Any]] = None,
+                       json_body: Optional[Dict[str, Any]] = None, timeout: float = 15.0) -> Any:
+    """Call the running Buck web app. Raises BuckAppUnavailable if it's not up."""
+    import requests
+
+    url = f"{_api_base()}{path}"
+
+    def _do() -> Any:
+        resp = requests.request(method, url, params=params, json=json_body, timeout=timeout)
+        if resp.status_code >= 400:
+            try:
+                detail = resp.json().get("detail", resp.text)
+            except Exception:
+                detail = resp.text
+            raise RuntimeError(f"{resp.status_code}: {detail}")
+        return resp.json()
+
+    try:
+        return await asyncio.to_thread(_do)
+    except requests.exceptions.RequestException as exc:
+        raise BuckAppUnavailable(
+            f"Could not reach the Buck web app at {_api_base()}. Start it with "
+            f"`python main.py` (and set BUCK_API_URL if it runs elsewhere). [{type(exc).__name__}]"
+        ) from exc
+
+
 # ── Tool implementations ─────────────────────────────────────────────────────
 
 async def single_analyze(
@@ -294,11 +351,18 @@ async def visualize_session(
     symbol: Optional[str] = None,
     chart: str = "equity_curve",
 ) -> Dict[str, Any]:
-    """d3 spec for a live realtime session (equity_curve / action_heatmap / drawdown_curve)."""
-    from realtime.state import get_status, get_history
+    """d3 spec for a live realtime session (equity_curve / action_heatmap / drawdown_curve).
+
+    Reads the session from the running web app so it matches what the UI shows;
+    falls back to in-process state if the app isn't reachable.
+    """
     from UI.backend.d3_viz import build_d3_spec
-    status = get_status(symbol)
-    steps = get_history(symbol, limit=500)
+    try:
+        status = await rt_session_status(symbol)
+        steps = (await rt_session_history(symbol, limit=500)).get("steps", [])
+    except BuckAppUnavailable:
+        from realtime.state import get_status, get_history
+        status, steps = get_status(symbol), get_history(symbol, limit=500)
     session = {
         "session_id": status.get("symbol"),
         "model_id": status.get("model_id"),
@@ -418,13 +482,101 @@ async def visualize_training(
 # ── Real-time intraday session (read-only) ───────────────────────────────────
 
 async def rt_session_status(symbol: Optional[str] = None) -> Dict[str, Any]:
-    from realtime.state import get_status
-    return get_status(symbol)
+    """Live status of a realtime session running in the Buck web app."""
+    params = {"symbol": symbol} if symbol else None
+    try:
+        return await _api_request("GET", "/rt/status", params=params)
+    except BuckAppUnavailable:
+        # Fallback: read in-process state (e.g. when mounted in the API process).
+        from realtime.state import get_status
+        return get_status(symbol)
 
 
 async def rt_session_history(symbol: Optional[str] = None, limit: int = 50) -> Dict[str, Any]:
-    from realtime.state import get_history
-    return {"steps": get_history(symbol, limit=limit)}
+    """Recent per-step records from a realtime session in the Buck web app."""
+    params: Dict[str, Any] = {"limit": limit}
+    if symbol:
+        params["symbol"] = symbol
+    try:
+        return await _api_request("GET", "/rt/history", params=params)
+    except BuckAppUnavailable:
+        from realtime.state import get_history
+        return {"steps": get_history(symbol, limit=limit)}
+
+
+async def rt_start_session(
+    symbol: str,
+    model_id: str,
+    replay: bool = True,
+    replay_start: Optional[str] = None,
+    replay_end: Optional[str] = None,
+    interval: str = "1d",
+    capital: float = 100000.0,
+    max_steps: int = 2000,
+    speed: float = 60.0,
+    open_ui: bool = True,
+) -> Dict[str, Any]:
+    """Start a realtime simulation in the Buck web app so it streams live in the UI.
+
+    Defaults to replay mode (works any time). Requires the web app to be running
+    and a trained `ppo_continuous` model. `speed` is the replay fast-forward factor
+    (per-bar delay = bar_period/speed; 1=real-time, higher=faster, >=1000=instant).
+    When `open_ui` is true, also opens the browser to the Realtime tab.
+    """
+    body = {
+        "symbol": symbol,
+        "model_id": model_id,
+        "interval": interval,
+        "replay": replay,
+        "replay_start": replay_start,
+        "replay_end": replay_end,
+        "capital": capital,
+        "max_steps": max_steps,
+        "speed": speed,
+        "indian_api_key": os.environ.get("INDIAN_API_KEY", ""),
+    }
+    status = await _api_request("POST", "/rt/start", json_body=body)
+    result: Dict[str, Any] = {"started": True, "status": status}
+    if open_ui:
+        result["ui"] = await open_buck_ui(tab="realtime", symbol=symbol)
+    return result
+
+
+async def rt_stop_session(symbol: str) -> Dict[str, Any]:
+    """Stop a running realtime session in the Buck web app."""
+    status = await _api_request("POST", "/rt/stop", json_body={"symbol": symbol})
+    return {"stopped": True, "status": status}
+
+
+async def open_buck_ui(
+    tab: str = "realtime",
+    symbol: Optional[str] = None,
+    autostart: bool = False,
+) -> Dict[str, Any]:
+    """Open the Buck web UI in the user's browser, deep-linked to a tab/symbol.
+
+    Use this to let the user *watch* what Buck is doing (e.g. a replay session)
+    rather than only reading results in chat.
+    """
+    from urllib.parse import urlencode
+    import webbrowser
+
+    params: Dict[str, Any] = {"tab": tab}
+    if symbol:
+        params["symbol"] = symbol
+    if autostart:
+        params["autostart"] = "1"
+    url = f"{_ui_base()}/?{urlencode(params)}"
+    opened = False
+    try:
+        opened = await asyncio.to_thread(webbrowser.open, url)
+    except Exception:  # noqa: BLE001
+        opened = False
+    return {
+        "url": url,
+        "opened": bool(opened),
+        "note": "Open this URL in your browser to watch." if not opened else "Opened in your browser.",
+    }
 
 
 # ── Dispatcher ──────────────────────────────────────────────────────────────
@@ -455,9 +607,12 @@ _IMPLS: Dict[str, Callable[..., Awaitable[Dict[str, Any]]]] = {
     "list_training_sessions": list_training_sessions,
     "list_d3_chart_types": list_d3_chart_types,
     "visualize_training": visualize_training,
-    # real-time intraday session (read-only)
+    # real-time intraday session (read + run-control via the web app)
     "rt_session_status": rt_session_status,
     "rt_session_history": rt_session_history,
+    "rt_start_session": rt_start_session,
+    "rt_stop_session": rt_stop_session,
+    "open_buck_ui": open_buck_ui,
 }
 
 

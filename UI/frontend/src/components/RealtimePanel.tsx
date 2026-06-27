@@ -13,6 +13,15 @@ import {
 import type { Config, RLModelInfo } from '../types'
 import D3Chart from './D3Chart'
 
+export interface RealtimeInitial {
+  symbol?: string
+  model?: string
+  interval?: string
+  start?: string
+  end?: string
+  autostart?: boolean
+}
+
 /**
  * Realtime tab: start/stop an intraday simulation and monitor the work live —
  * action / equity / PnL tiles, an equity (or action / drawdown) d3 chart, and a
@@ -22,6 +31,15 @@ import D3Chart from './D3Chart'
  * any time (off market hours) — the recommended default for trying it out.
  */
 const POLL_MS = 4000
+const REPLAY_POLL_MS = 1500 // poll faster while watching an accelerated replay
+const SPEED_OPTIONS = [
+  { v: 1, label: 'Real-time (1×)' },
+  { v: 5, label: '5×' },
+  { v: 30, label: '30×' },
+  { v: 60, label: '60×' },
+  { v: 300, label: '300×' },
+  { v: 1000, label: 'Instant' },
+]
 const RT_CHARTS = [
   { id: 'equity_curve', label: 'Equity curve' },
   { id: 'action_heatmap', label: 'Action heatmap' },
@@ -51,15 +69,17 @@ function signalTone(sig?: string | null): 'pos' | 'neg' | 'default' {
   return 'default'
 }
 
-export default function RealtimePanel({ config }: { config: Config }) {
+export default function RealtimePanel({ config, initial }: { config: Config; initial?: RealtimeInitial }) {
   const [models, setModels] = useState<RLModelInfo[]>([])
-  const [symbol, setSymbol] = useState('BHEL.NS')
-  const [modelId, setModelId] = useState('')
-  const [interval, setIntervalVal] = useState('1d')
+  const [symbol, setSymbol] = useState((initial?.symbol ?? 'BHEL.NS').toUpperCase())
+  const [modelId, setModelId] = useState(initial?.model ?? '')
+  const [interval, setIntervalVal] = useState(initial?.interval ?? '1d')
   const [replay, setReplay] = useState(true)
-  const [replayStart, setReplayStart] = useState(todayISO(-30))
-  const [replayEnd, setReplayEnd] = useState(todayISO())
+  const [replayStart, setReplayStart] = useState(initial?.start ?? todayISO(-30))
+  const [replayEnd, setReplayEnd] = useState(initial?.end ?? todayISO())
   const [capital, setCapital] = useState(100000)
+  const [speed, setSpeed] = useState(60)
+  const autostartedRef = useRef(false)
 
   const [status, setStatus] = useState<RTStatus | null>(null)
   const [steps, setSteps] = useState<RTStep[]>([])
@@ -101,13 +121,15 @@ export default function RealtimePanel({ config }: { config: Config }) {
     refresh()
     const running = status?.running
     if (running) {
-      pollRef.current = window.setInterval(refresh, POLL_MS)
+      // Poll faster during an accelerated replay so the stream is watchable.
+      const pollMs = status?.replay ? REPLAY_POLL_MS : POLL_MS
+      pollRef.current = window.setInterval(refresh, pollMs)
       return () => {
         if (pollRef.current) window.clearInterval(pollRef.current)
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refresh, status?.running])
+  }, [refresh, status?.running, status?.replay])
 
   async function handleStart() {
     setBusy(true)
@@ -122,6 +144,7 @@ export default function RealtimePanel({ config }: { config: Config }) {
         replay_start: replay ? replayStart : undefined,
         replay_end: replay ? replayEnd : undefined,
         capital,
+        speed: replay ? speed : undefined,
         indian_api_key: config.indian_api_key || undefined,
       })
       setStatus(st)
@@ -149,6 +172,17 @@ export default function RealtimePanel({ config }: { config: Config }) {
   }
 
   const running = !!status?.running
+
+  // Auto-start once when opened via a deep link with ?autostart=1 (e.g. from the
+  // open_buck_ui MCP tool), as soon as a model is available.
+  useEffect(() => {
+    if (!initial?.autostart || autostartedRef.current) return
+    if (!modelId || running) return
+    autostartedRef.current = true
+    handleStart()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initial?.autostart, modelId, running])
+
   const pnlPct = status?.intraday_pnl_pct ?? null
   const recent = [...steps].reverse().slice(0, 40)
 
@@ -258,7 +292,7 @@ export default function RealtimePanel({ config }: { config: Config }) {
         </div>
 
         {replay && (
-          <div className="mt-3 grid grid-cols-2 gap-3 sm:max-w-md">
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:max-w-2xl">
             <label className="flex flex-col gap-1">
               <span className="text-xs font-medium text-gray-700">Replay start</span>
               <input
@@ -278,6 +312,22 @@ export default function RealtimePanel({ config }: { config: Config }) {
                 onChange={(e) => setReplayEnd(e.target.value)}
                 disabled={running}
               />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-gray-700">Fast-forward</span>
+              <select
+                className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={speed}
+                onChange={(e) => setSpeed(Number(e.target.value))}
+                disabled={running}
+                title="Replay speed: per-bar delay = bar period / speed"
+              >
+                {SPEED_OPTIONS.map((o) => (
+                  <option key={o.v} value={o.v}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
         )}

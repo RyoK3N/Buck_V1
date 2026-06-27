@@ -343,6 +343,8 @@ class RTStartRequest(BaseModel):
     replay_end: Optional[str] = None
     capital: float = 100000.0
     max_steps: int = 2000
+    speed: float = 1.0  # replay fast-forward factor (delay = bar_period/speed)
+    online_update_every: Optional[int] = None  # None → off for replay
     indian_api_key: Optional[str] = None
 
 

@@ -51,6 +51,7 @@ class SessionManager:
         exchange: Optional[str] = None,
         poll_seconds: Optional[float] = None,
         online_update_every: Optional[int] = None,
+        speed: float = 1.0,
         indian_api_key: str = "",
     ) -> Dict[str, Any]:
         if replay and (not replay_start or not replay_end):
@@ -62,18 +63,19 @@ class SessionManager:
                 raise RuntimeError(f"a session for {symbol!r} is already running; stop it first")
 
             # Resolve defaults from settings, tolerating a missing config.
+            # Online updates default OFF for replay (deterministic backtest parity);
+            # live keeps the configured adaptive cadence.
+            live_default_updates = 4
             try:
                 from agent_scripts.config import SETTINGS
                 exchange = exchange or getattr(SETTINGS, "market_exchange", "NSE")
                 poll_seconds = poll_seconds if poll_seconds is not None else getattr(SETTINGS, "rt_poll_seconds", 30.0)
-                online_update_every = (
-                    online_update_every if online_update_every is not None
-                    else getattr(SETTINGS, "rt_online_update_every", 4)
-                )
+                live_default_updates = getattr(SETTINGS, "rt_online_update_every", 4)
             except Exception:  # noqa: BLE001
                 exchange = exchange or "NSE"
                 poll_seconds = poll_seconds if poll_seconds is not None else 30.0
-                online_update_every = online_update_every if online_update_every is not None else 4
+            if online_update_every is None:
+                online_update_every = 0 if replay else live_default_updates
 
             import os
             sim = IntradaySimulator(
@@ -89,6 +91,7 @@ class SessionManager:
                 online_update_every=online_update_every,
                 api_key=indian_api_key or os.environ.get("INDIAN_API_KEY", ""),
                 max_steps=max_steps,
+                speed=speed,
             )
 
             running = _Running(sim, thread=None)  # type: ignore[arg-type]

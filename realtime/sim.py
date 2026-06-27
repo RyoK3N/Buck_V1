@@ -35,7 +35,18 @@ from .state import LiveSessionState, register_session
 # Min bars before we trust features / start updating.
 _MIN_HISTORY = 35
 _UPDATE_MIN_BARS = 45
-TXN_COST = 0.0005  # 5 bps per unit of position change
+# Per-unit-of-position-change transaction cost. MUST match TradingEnvironment's
+# default `transaction_cost` (tools/rl/env.py) so the live path's PnL matches the
+# backtest/training math. (Replay uses TradingEnvironment directly.)
+TXN_COST = 0.001  # 10 bps
+
+# Wall-clock seconds represented by one bar of each interval — used to pace replay.
+_BAR_PERIOD = {
+    "1m": 60, "2m": 120, "5m": 300, "15m": 900, "30m": 1800,
+    "60m": 3600, "90m": 5400, "1h": 3600, "1d": 86400,
+}
+# At/above this speed factor, replay runs with no pacing delay ("instant").
+_INSTANT_SPEED = 1000.0
 
 
 def _signal(pos: float) -> str:
@@ -55,9 +66,10 @@ class IntradaySimulator:
         replay: bool = False,
         replay_start: Optional[str] = None,
         replay_end: Optional[str] = None,
-        online_update_every: int = 4,
+        online_update_every: int = 0,
         api_key: str = "",
         max_steps: int = 2000,
+        speed: float = 1.0,
     ) -> None:
         self.symbol = symbol
         self.model_id = model_id
@@ -68,9 +80,12 @@ class IntradaySimulator:
         self.replay = replay
         self.replay_start = replay_start
         self.replay_end = replay_end
-        self.online_update_every = max(1, online_update_every)
+        # 0 disables online updates (pure inference → deterministic, matches backtest).
+        self.online_update_every = max(0, int(online_update_every))
         self.api_key = api_key
         self.max_steps = max_steps
+        # Replay fast-forward factor: per-bar delay = bar_period / speed.
+        self.speed = max(0.0, float(speed))
 
         self.state = LiveSessionState(
             symbol=symbol, model_id=model_id, capital=capital,
@@ -79,6 +94,7 @@ class IntradaySimulator:
         self.df = pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume"])
         self.agent = None  # lazily loaded PPOContinuousAgent (in-session copy)
         self.pos = 0.0           # current target-position fraction in [0, 1]
+        self.entry_price = 0.0   # avg entry price of the open position (live path)
         self.equity = capital
         self._bars_since_update = 0
         # Cooperative stop flag — set via request_stop() (e.g. from the REST layer)
@@ -103,21 +119,23 @@ class IntradaySimulator:
         agent.reset_window()
         return agent
 
-    # ── bar sources ────────────────────────────────────────────────────────────
-    def _replay_bars(self) -> Iterator[Dict[str, Any]]:
-        from tools.rl.rl_tool import fetch_historical_data
+    # ── pacing / position helpers ──────────────────────────────────────────────
+    def _bar_period_seconds(self) -> float:
+        return float(_BAR_PERIOD.get(self.interval, 60.0))
 
-        df = fetch_historical_data(self.symbol, self.replay_start, self.replay_end, self.interval)
-        if df is None or df.empty:
-            raise RuntimeError(f"no replay data for {self.symbol} {self.replay_start}..{self.replay_end}")
-        for ts, row in df.iterrows():
-            yield {
-                "timestamp": str(ts),
-                "Open": float(row["Open"]), "High": float(row["High"]),
-                "Low": float(row["Low"]), "Close": float(row["Close"]),
-                "Volume": float(row.get("Volume", 0.0)),
-            }
+    def _replay_delay(self) -> float:
+        """Wall-clock delay between replay bars given the fast-forward factor."""
+        if self.speed <= 0 or self.speed >= _INSTANT_SPEED:
+            return 0.0
+        return self._bar_period_seconds() / self.speed
 
+    def _live_unrealized(self, close: float) -> float:
+        """Unrealized PnL % of the open position — mirrors env.unrealized_pnl_pct()."""
+        if self.pos <= 1e-9 or self.entry_price <= 0:
+            return 0.0
+        return (close / self.entry_price - 1.0) * 100.0
+
+    # ── bar source (live) ───────────────────────────────────────────────────────
     def _live_bars(self) -> Iterator[Dict[str, Any]]:
         from accuracy.market_hours import is_market_open, time_until_next_open
         from tools.rl.rl_tool import fetch_live_data
@@ -154,17 +172,16 @@ class IntradaySimulator:
             if self._stop.wait(timeout=self.poll_seconds):
                 return
 
-    def _bars(self) -> Iterator[Dict[str, Any]]:
-        return self._replay_bars() if self.replay else self._live_bars()
-
     # ── feature state for prediction ─────────────────────────────────────────
     def _predict_target(self) -> Dict[str, float]:
         from tools.rl.features import extract_rich_state
 
         idx = len(self.df) - 1
         cash_ratio = 1.0 - self.pos
+        close = float(self.df["Close"].iloc[idx])
         state = extract_rich_state(self.df, idx=idx, position_size=self.pos,
-                                   cash_ratio=cash_ratio, unrealized_pnl_pct=0.0)
+                                   cash_ratio=cash_ratio,
+                                   unrealized_pnl_pct=self._live_unrealized(close))
         action, info = self.agent.act(state, eval_mode=True)
         return {"target_position": float(action), **info}
 
@@ -189,67 +206,175 @@ class IntradaySimulator:
             self.agent._window_buf = saved_window
         return stats
 
-    # ── headroom pipeline ────────────────────────────────────────────────────
-    @staticmethod
-    def _stream_through_headroom(step: Dict[str, Any]) -> None:
-        """Push a step summary through the context-engineering pipeline so the
-        live stream is compressed + accounted for (USAGE tracker)."""
-        try:
-            from mcp_server.context_engineering.compressor import compress_payload
-            from mcp_server.context_engineering.cost_tracker import USAGE
+    def _online_update_replay(self, df, upto_idx: int) -> Optional[Dict[str, float]]:
+        """Online PPO update during replay over ONLY the bars seen so far (no future
+        leakage). Same throwaway-env + window save/restore as _online_update."""
+        if upto_idx + 1 < _UPDATE_MIN_BARS:
+            return None
+        from tools.rl.env import TradingEnvironment
 
-            _, stats = compress_payload(step)
-            USAGE.record("rt_step", stats.get("tokens_raw", 0), stats.get("tokens_compressed", 0),
-                         compressed=stats.get("compressed", False))
+        lo = max(0, upto_idx - 256)
+        window_df = df.iloc[lo:upto_idx + 1].reset_index(drop=True)
+        env = TradingEnvironment(window_df, initial_capital=self.capital)
+        env.reset()
+        saved_window = self.agent._window_buf
+        self.agent._window_buf = []
+        try:
+            rollout = self.agent.collect_rollout(env)
+            if rollout["n_steps"] == 0:
+                return None
+            stats = self.agent.update(rollout)
+        finally:
+            self.agent._window_buf = saved_window
+        return stats
+
+    # ── headroom accounting ──────────────────────────────────────────────────
+    @staticmethod
+    def _account_step(step: Dict[str, Any]) -> None:
+        """Account a per-bar step in the USAGE tracker with a lightweight token
+        count. Steps are tiny (~70 tokens) so we never invoke headroom compression
+        here — that would be pure overhead in the hot loop and could trip the
+        headroom circuit breaker over a long replay."""
+        try:
+            import json as _json
+            from mcp_server.context_engineering.cost_tracker import USAGE, estimate_tokens
+
+            n = estimate_tokens(_json.dumps(step, default=str))
+            USAGE.record("rt_step", n, n, compressed=False)
         except Exception:
             pass
 
-    # ── main loop ────────────────────────────────────────────────────────────
+    # ── orchestration ──────────────────────────────────────────────────────────
     def run(self) -> Dict[str, Any]:
         self.agent = self._load_agent()
         register_session(self.state)
         self.state.status = "running"
+        mode = "REPLAY" if self.replay else "LIVE"
+        speed = f" speed×{self.speed:g}" if self.replay else ""
         print(f"▶️  intraday sim: {self.symbol} model={self.model_id} "
-              f"{'REPLAY' if self.replay else 'LIVE'} interval={self.interval}")
+              f"{mode} interval={self.interval}{speed}")
 
+        steps: List[Dict[str, Any]] = []
+        try:
+            if self.replay:
+                self._run_replay(steps)
+            else:
+                self._run_live(steps)
+        except KeyboardInterrupt:
+            print("\n🛑 interrupted — finalising session")
+        finally:
+            self.state.status = "stopped"
+            self._finalise(steps)
+
+        return self.state.status_dict()
+
+    # ── replay engine (env-backed, paced) ──────────────────────────────────────
+    def _run_replay(self, steps: List[Dict[str, Any]]) -> None:
+        """Stream a historical window through the SAME TradingEnvironment used by
+        training / the /rl/predict backtest, so replay PnL is exact. Paced by the
+        fast-forward factor so the UI can watch the agent bar-by-bar."""
+        from tools.rl.rl_tool import fetch_historical_data
+        from tools.rl.env import TradingEnvironment
+
+        df = fetch_historical_data(self.symbol, self.replay_start, self.replay_end, self.interval)
+        if df is None or df.empty:
+            raise RuntimeError(f"no replay data for {self.symbol} {self.replay_start}..{self.replay_end}")
+        self.df = df
+
+        env = TradingEnvironment(df, initial_capital=self.capital)
+        state = env.reset()
+        self.agent.reset_window()
+        delay = self._replay_delay()
+        index = list(df.index)
+
+        while not self._stop.is_set():
+            if env.idx >= env.n - 1:
+                break
+            action, info = self.agent.act(state, eval_mode=True)
+            price_now = float(env.close[env.idx])
+            next_state, _reward, done, si = env.step(action)  # authoritative math
+            bar_ret = (si.price / price_now - 1.0) if price_now else 0.0
+
+            step = {
+                "ts": str(index[si.step]) if si.step < len(index) else str(si.step),
+                "price": round(si.price, 4),
+                "target_position": round(si.target_position, 4),
+                "signal": _signal(si.target_position),
+                "realized_return": round(si.step_return, 6),
+                "bar_return": round(bar_ret, 6),
+                "equity": round(si.portfolio_value, 2),
+                "mu": round(info.get("mu", 0.0), 4),
+                "value": round(info.get("value", 0.0), 4),
+                "forced_exit": si.forced_exit,
+            }
+            steps.append(step)
+            self._account_step(step)
+            self.state.record_step(step)
+            self.pos = si.realized_position
+            self.equity = si.portfolio_value
+
+            # Optional online learning (off by default → deterministic backtest parity).
+            if self.online_update_every:
+                self._bars_since_update += 1
+                if self._bars_since_update >= self.online_update_every:
+                    self._bars_since_update = 0
+                    stats = self._online_update_replay(df, si.step)
+                    if stats:
+                        self.state.record_update(stats)
+
+            state = next_state
+            if done or self.state.n_steps >= self.max_steps:
+                break
+            if delay and self._stop.wait(timeout=delay):
+                break
+
+        env.close_position()
+        self.equity = env.portfolio_value()
+
+    # ── live engine (incremental, poll-paced) ──────────────────────────────────
+    def _run_live(self, steps: List[Dict[str, Any]]) -> None:
         prev_close: Optional[float] = None
         pending: Optional[Dict[str, float]] = None  # prediction awaiting its outcome
-        steps: List[Dict[str, Any]] = []
 
-        try:
-            for bar in self._bars():
-                if self._stop.is_set():
-                    break
-                self.df.loc[len(self.df)] = [bar["Open"], bar["High"], bar["Low"], bar["Close"], bar["Volume"]]
-                close = bar["Close"]
+        for bar in self._live_bars():
+            if self._stop.is_set():
+                break
+            self.df.loc[len(self.df)] = [bar["Open"], bar["High"], bar["Low"], bar["Close"], bar["Volume"]]
+            close = bar["Close"]
 
-                # Settle the previous prediction against this bar's move.
-                if pending is not None and prev_close:
-                    tgt = pending["target_position"]
-                    bar_ret = (close / prev_close) - 1.0
-                    pos_change = abs(tgt - self.pos)
-                    gross = tgt * bar_ret
-                    cost = pos_change * TXN_COST
-                    net = gross - cost
-                    self.equity *= (1.0 + net)
-                    self.pos = tgt
+            # Settle the previous prediction against this bar's move.
+            if pending is not None and prev_close:
+                tgt = pending["target_position"]
+                bar_ret = (close / prev_close) - 1.0
+                prev_pos = self.pos
+                pos_change = abs(tgt - prev_pos)
+                gross = tgt * bar_ret
+                cost = pos_change * TXN_COST
+                net = gross - cost
+                self.equity *= (1.0 + net)
+                self.pos = tgt
+                # Track entry price so _predict_target sees real unrealized PnL.
+                if tgt <= 1e-9:
+                    self.entry_price = 0.0
+                elif prev_pos <= 1e-9:
+                    self.entry_price = close
 
-                    step = {
-                        "ts": bar["timestamp"],
-                        "price": round(close, 4),
-                        "target_position": round(tgt, 4),
-                        "signal": _signal(tgt),
-                        "realized_return": round(net, 6),
-                        "bar_return": round(bar_ret, 6),
-                        "equity": round(self.equity, 2),
-                        "mu": round(pending.get("mu", 0.0), 4),
-                        "value": round(pending.get("value", 0.0), 4),
-                    }
-                    steps.append(step)
-                    self._stream_through_headroom(step)
-                    self.state.record_step(step)
+                step = {
+                    "ts": bar["timestamp"],
+                    "price": round(close, 4),
+                    "target_position": round(tgt, 4),
+                    "signal": _signal(tgt),
+                    "realized_return": round(net, 6),
+                    "bar_return": round(bar_ret, 6),
+                    "equity": round(self.equity, 2),
+                    "mu": round(pending.get("mu", 0.0), 4),
+                    "value": round(pending.get("value", 0.0), 4),
+                }
+                steps.append(step)
+                self._account_step(step)
+                self.state.record_step(step)
 
-                    # Online learning.
+                if self.online_update_every:
                     self._bars_since_update += 1
                     if self._bars_since_update >= self.online_update_every:
                         self._bars_since_update = 0
@@ -260,23 +385,16 @@ class IntradaySimulator:
                                   f"policy_loss={stats.get('policy_loss', 0):.4f} "
                                   f"entropy={stats.get('entropy', 0):.4f}")
 
-                    print(f"  {step['ts']}  px={close:.2f}  pos→{tgt:.2f} ({step['signal']})  "
-                          f"ret={net*100:+.3f}%  equity={self.equity:,.0f}")
+                print(f"  {step['ts']}  px={close:.2f}  pos→{tgt:.2f} ({step['signal']})  "
+                      f"ret={net*100:+.3f}%  equity={self.equity:,.0f}")
 
-                # Predict for the NEXT bar (before the event) once we have history.
-                prev_close = close
-                if len(self.df) > _MIN_HISTORY:
-                    pending = self._predict_target()
+            # Predict for the NEXT bar (before the event) once we have history.
+            prev_close = close
+            if len(self.df) > _MIN_HISTORY:
+                pending = self._predict_target()
 
-                if self.state.n_steps >= self.max_steps:
-                    break
-        except KeyboardInterrupt:
-            print("\n🛑 interrupted — finalising session")
-        finally:
-            self.state.status = "stopped"
-            self._finalise(steps)
-
-        return self.state.status_dict()
+            if self.state.n_steps >= self.max_steps:
+                break
 
     # ── finalisation ─────────────────────────────────────────────────────────
     def _finalise(self, steps: List[Dict[str, Any]]) -> None:

@@ -18,8 +18,14 @@ import argparse
 import sys
 from pathlib import Path
 
-# Make the repo root importable when invoked as a script.
+# Make the repo root importable when invoked as a script — and make sure the
+# script's OWN directory (<repo>/mcp_server) is NOT on sys.path. Otherwise
+# `mcp_server/tools.py` would be importable as a top-level `tools` module and
+# shadow the real `tools/` package (breaking `from tools.rl... import ...` with
+# "attempted relative import with no known parent package").
 _REPO_ROOT = Path(__file__).resolve().parents[1]
+_SCRIPT_DIR = str(Path(__file__).resolve().parent)
+sys.path[:] = [p for p in sys.path if p not in ("", _SCRIPT_DIR)]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { analyzeStock, batchAnalyze } from './api/client'
 import type { AnalyzeResponse, BatchResponse, Config } from './types'
 import Header from './components/Header'
@@ -15,6 +15,33 @@ import TrainingObservability from './components/TrainingObservability'
 import RealtimePanel from './components/RealtimePanel'
 
 type Tab = 'single' | 'batch' | 'visualizer' | 'rl' | 'realtime' | 'training' | 'claude'
+const TABS: Tab[] = ['single', 'batch', 'visualizer', 'rl', 'realtime', 'training', 'claude']
+
+export interface RealtimeDeepLink {
+  symbol?: string
+  model?: string
+  interval?: string
+  start?: string
+  end?: string
+  autostart?: boolean
+}
+
+/** Parse deep-link query params (set by the open_buck_ui MCP tool / shared links). */
+function readDeepLink(): { tab?: Tab; realtime: RealtimeDeepLink } {
+  const q = new URLSearchParams(window.location.search)
+  const t = q.get('tab') as Tab | null
+  return {
+    tab: t && TABS.includes(t) ? t : undefined,
+    realtime: {
+      symbol: q.get('symbol') ?? undefined,
+      model: q.get('model') ?? undefined,
+      interval: q.get('interval') ?? undefined,
+      start: q.get('start') ?? undefined,
+      end: q.get('end') ?? undefined,
+      autostart: q.get('autostart') === '1' || q.get('autostart') === 'true',
+    },
+  }
+}
 
 export default function App() {
   const [config, setConfig] = useState<Config>({
@@ -25,11 +52,20 @@ export default function App() {
     anthropic_api_key: '',
     claude_model: 'claude-opus-4-5',
   })
-  const [tab, setTab] = useState<Tab>('single')
+  // Deep-link (e.g. opened by the open_buck_ui MCP tool) — read once on mount.
+  const [deepLink] = useState(readDeepLink)
+  const [tab, setTab] = useState<Tab>(deepLink.tab ?? 'single')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<AnalyzeResponse | BatchResponse | null>(null)
   const [selectedTools, setSelectedTools] = useState<string[]>([])
+
+  // If a deep link targeted a tab, reflect it in the document title briefly.
+  useEffect(() => {
+    if (deepLink.tab === 'realtime' && deepLink.realtime.symbol) {
+      document.title = `Buck · Realtime · ${deepLink.realtime.symbol}`
+    }
+  }, [deepLink])
 
   const handleConfigChange = useCallback((cfg: Config) => setConfig(cfg), [])
   const handleToolsChange = useCallback((tools: string[]) => setSelectedTools(tools), [])
@@ -154,7 +190,7 @@ export default function App() {
           {/* Realtime monitoring tab */}
           {tab === 'realtime' && (
             <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-              <RealtimePanel config={config} />
+              <RealtimePanel config={config} initial={deepLink.tab === 'realtime' ? deepLink.realtime : undefined} />
             </div>
           )}
 

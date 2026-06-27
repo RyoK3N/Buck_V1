@@ -32,8 +32,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--exchange", default=None, help="Exchange for market-hours gate (default: env MARKET_EXCHANGE/NSE)")
     p.add_argument("--poll-seconds", type=float, default=None, help="Seconds between live polls (default: env RT_POLL_SECONDS)")
     p.add_argument("--capital", type=float, default=100_000.0, help="Starting capital")
-    p.add_argument("--online-update-every", type=int, default=None,
-                   help="Run an online PPO update every N bars (default: env RT_ONLINE_UPDATE_EVERY)")
+    p.add_argument("--online-update-every", type=int, default=0,
+                   help="Run an online PPO update every N bars (0 = off; replay stays a deterministic backtest)")
+    p.add_argument("--speed", type=float, default=1.0,
+                   help="Replay fast-forward factor: per-bar delay = bar_period/speed "
+                        "(1 = real-time, higher = faster, >=1000 = instant)")
     p.add_argument("--max-steps", type=int, default=2000, help="Stop after this many observed bars")
     p.add_argument("--indian-api-key", default=None, help="Live-data API key (or env INDIAN_API_KEY)")
     # replay
@@ -49,11 +52,10 @@ def run_from_args(args) -> dict:
 
         exchange = args.exchange or getattr(SETTINGS, "market_exchange", "NSE")
         poll_seconds = args.poll_seconds if args.poll_seconds is not None else getattr(SETTINGS, "rt_poll_seconds", 30.0)
-        online_every = args.online_update_every if args.online_update_every is not None else getattr(SETTINGS, "rt_online_update_every", 4)
     except Exception:
         exchange = args.exchange or "NSE"
         poll_seconds = args.poll_seconds if args.poll_seconds is not None else 30.0
-        online_every = args.online_update_every if args.online_update_every is not None else 4
+    online_every = args.online_update_every  # 0 = off (deterministic replay)
 
     if args.replay and (not args.replay_start or not args.replay_end):
         raise SystemExit("--replay requires --replay-start and --replay-end")
@@ -73,6 +75,7 @@ def run_from_args(args) -> dict:
         online_update_every=online_every,
         api_key=api_key,
         max_steps=args.max_steps,
+        speed=args.speed,
     )
     return sim.run()
 

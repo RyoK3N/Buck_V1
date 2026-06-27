@@ -56,9 +56,9 @@ READ_ONLY_TOOLS = {
     "headroom_stats",
     "list_training_sessions",
     "list_d3_chart_types",
-    "rt_session_status",
-    "rt_session_history",
 }
+# NOTE: rt_session_status / rt_session_history / visualize_session are deliberately
+# NOT cached — they report a LIVE session and must reflect the latest step.
 
 # Tools that hit an external data provider → throttle outbound calls.
 DATA_FETCH_TOOLS = {

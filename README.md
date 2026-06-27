@@ -236,6 +236,15 @@ so you don't need to put secrets in the Claude Desktop config. See
 [docs/CLAUDE_MCP.md](docs/CLAUDE_MCP.md) for the full tool surface and HTTP/SSE
 transport options.
 
+**Watch Claude run a replay simulation.** With the web app running (`python main.py`),
+use the `simulate_replay` prompt or just ask, e.g. *"simulate INFY.NS in replay mode
+for last month."* Claude starts the session in the web app via `rt_start_session`,
+opens your browser to the **Realtime** tab (`open_buck_ui`), and narrates progress
+from `rt_session_status` / `visualize_session` — the same session you see live in the
+UI. The MCP tools drive the running web app (`BUCK_API_URL` / `BUCK_UI_URL`), so
+Claude and the UI stay in sync. Replay mode works any time (no market hours needed)
+and requires a trained `ppo_continuous` model.
+
 ---
 
 ## Configuration

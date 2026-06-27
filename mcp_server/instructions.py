@@ -38,10 +38,11 @@ WHAT BUCK CAN DO (by category)
   • Reinforcement-learning trading agents — train, backtest, get a live signal,
     and stack models into an ensemble.
       tools: rl_train, rl_predict, rl_simulate, rl_ensemble_predict, list_rl_models
-  • Realtime intraday sessions — a live online-learning loop you can monitor.
-      tools: rt_session_status, rt_session_history, visualize_session
-      (sessions are STARTED from Buck's web UI "Realtime" tab or `python -m realtime.cli`;
-       the MCP tools READ a running session — replay mode works outside market hours.)
+  • Realtime intraday sessions — a live online-learning loop you can START, WATCH
+    and STOP. Sessions run inside the web app and show live in its Realtime tab.
+      tools: rt_start_session, rt_stop_session, rt_session_status,
+             rt_session_history, visualize_session, open_buck_ui
+      (replay mode works any time; needs the web app running — `python main.py`.)
   • Prediction accuracy — how well past forecasts held up; check before trusting one.
       tools: get_prediction_accuracy, list_recent_predictions, compare_predictions_vs_actual
   • Visualization — Plotly market charts + d3 specs for training/accuracy/comparison.
@@ -59,9 +60,14 @@ RECOMMENDED WORKFLOWS
        list_rl_models → rl_train (algorithm='ppo_continuous', episodes ≥ 200) →
        rl_predict (backtest over a date range) → rl_simulate (latest-snapshot
        signal) and/or rl_ensemble_predict → visualize_training to inspect the run.
-  3) Monitor a live/replay session:
-       rt_session_status + rt_session_history → visualize_session (equity / action
-       heatmap / drawdown). Start the session from the UI/CLI first.
+  3) Run a REPLAY simulation the user can WATCH in the web UI (needs the web app
+     running — `python main.py`):
+       (ensure a ppo_continuous model exists via list_rl_models, else rl_train) →
+       rt_start_session(symbol, model_id, replay=True, replay_start, replay_end,
+       open_ui=True) — this starts the sim in the web app AND opens the browser to
+       the Realtime tab → poll rt_session_status / visualize_session to narrate
+       progress → rt_stop_session when done. Use open_buck_ui any time to let the
+       user watch a tab. The rt_* tools drive the SAME session the UI shows.
   4) Accuracy review:
        get_prediction_accuracy → list_recent_predictions →
        compare_predictions_vs_actual → visualize_accuracy / visualize_predictions.
@@ -103,6 +109,37 @@ def train_and_simulate_prompt(symbol: str, model_id: str, start_date: str, end_d
         f"4. rl_simulate (symbol={symbol!r}, model_id={model_id!r}) for the latest-snapshot BUY/HOLD/SELL signal.\n"
         "5. visualize_training on the saved session to inspect reward/equity/loss curves.\n"
         "Summarize return %, drawdown and whether the agent is trustworthy."
+    )
+
+
+def simulate_replay_prompt(
+    symbol: str,
+    model_id: str = "",
+    replay_start: str = "",
+    replay_end: str = "",
+    interval: str = "1d",
+) -> str:
+    model_line = (
+        f"Use model_id={model_id!r}." if model_id
+        else "Pick a trained ppo_continuous model from list_rl_models (train one with rl_train if none exists)."
+    )
+    dates = (
+        f"replay_start={replay_start!r}, replay_end={replay_end!r}"
+        if (replay_start and replay_end)
+        else "a recent ~30-day window (e.g. last month)"
+    )
+    return (
+        f"Run a REPLAY trading simulation for the NSE stock {symbol} that I can watch live in the Buck web UI.\n\n"
+        "Prerequisite: the Buck web app must be running (`python main.py`).\n\n"
+        "Steps:\n"
+        f"1. {model_line}\n"
+        f"2. Call rt_start_session(symbol={symbol!r}, model_id=<model>, replay=true, "
+        f"{dates}, interval={interval!r}, open_ui=true). This starts the sim inside the web app and "
+        "opens my browser to the Realtime tab so I can watch the equity curve, signals and PnL update.\n"
+        "3. Poll rt_session_status every few seconds and narrate progress (signal, equity, PnL, steps); "
+        "use visualize_session for the equity/action chart.\n"
+        "4. When the run finishes (or I ask), call rt_stop_session and summarize return %, drawdown and behaviour.\n"
+        "Buck is NSE-only — keep the symbol in .NS form."
     )
 
 

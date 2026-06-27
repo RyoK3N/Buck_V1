@@ -16,6 +16,7 @@ from .instructions import (
     SERVER_INSTRUCTIONS,
     analyze_stock_prompt,
     train_and_simulate_prompt,
+    simulate_replay_prompt,
     compare_peers_prompt,
 )
 
@@ -36,6 +37,10 @@ def _register_prompts() -> None:
         name="train_and_simulate",
         description="Buck's RL lifecycle for an NSE stock: train → backtest → live signal → visualize.",
     )(train_and_simulate_prompt)
+    mcp.prompt(
+        name="simulate_replay",
+        description="Run a REPLAY simulation in the web app and open the UI so the user can watch it live.",
+    )(simulate_replay_prompt)
     mcp.prompt(
         name="compare_peers",
         description="Compare several NSE stocks with batch analysis + a rebased overlay chart.",

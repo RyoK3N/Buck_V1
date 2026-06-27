@@ -427,6 +427,66 @@ BUCK_TOOLS: List[Dict[str, Any]] = [
             },
         },
     },
+    {
+        "name": "rt_start_session",
+        "description": (
+            "Start a realtime intraday simulation in Buck's running web app so it streams LIVE in the "
+            "UI's Realtime tab. Defaults to REPLAY mode (works any time, off market hours). Requires the "
+            "web app running (`python main.py`) and a trained ppo_continuous model (see list_rl_models). "
+            "By default also opens the browser to the Realtime tab so the user can watch. Then poll "
+            "rt_session_status / visualize_session to monitor. NSE symbols only (.NS)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbol": _SYMBOL,
+                "model_id": {"type": "string", "description": "A trained ppo_continuous model id"},
+                "replay": {"type": "boolean", "default": True,
+                            "description": "Replay recent history (any time) vs live (market hours only)"},
+                "replay_start": {**_DATE, "description": "Replay start (YYYY-MM-DD); required when replay=true"},
+                "replay_end": {**_DATE, "description": "Replay end (YYYY-MM-DD); required when replay=true"},
+                "interval": {"type": "string", "default": "1d"},
+                "capital": {"type": "number", "default": 100000.0},
+                "max_steps": {"type": "integer", "default": 2000, "minimum": 1, "maximum": 10000},
+                "speed": {"type": "number", "default": 60.0, "minimum": 0.0,
+                           "description": "Replay fast-forward factor: per-bar delay = bar_period/speed "
+                                          "(1=real-time, higher=faster, >=1000=instant)"},
+                "open_ui": {"type": "boolean", "default": True,
+                             "description": "Also open the browser to the Realtime tab for this symbol"},
+            },
+            "required": ["symbol", "model_id"],
+        },
+    },
+    {
+        "name": "rt_stop_session",
+        "description": "Stop a running realtime simulation in the Buck web app (finishes at the next safe step).",
+        "input_schema": {
+            "type": "object",
+            "properties": {"symbol": _SYMBOL},
+            "required": ["symbol"],
+        },
+    },
+    {
+        "name": "open_buck_ui",
+        "description": (
+            "Open Buck's web UI in the user's browser, deep-linked to a tab (single, batch, visualizer, "
+            "rl, realtime, training, claude) and optionally a symbol. Use this to let the user WATCH what "
+            "Buck is doing instead of only reading results in chat."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "tab": {
+                    "type": "string",
+                    "enum": ["single", "batch", "visualizer", "rl", "realtime", "training", "claude"],
+                    "default": "realtime",
+                },
+                "symbol": {"type": "string", "description": "Optional symbol to prefill (.NS)"},
+                "autostart": {"type": "boolean", "default": False,
+                               "description": "Hint the UI to auto-start (Realtime tab) with prefilled values"},
+            },
+        },
+    },
 ]
 
 

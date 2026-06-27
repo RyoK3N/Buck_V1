@@ -177,6 +177,43 @@ def test_client_error_does_not_open_breaker_via_wrap_tool():
     assert env["data"]["ok"] is True
 
 
+# ── Headroom size-gate (tiny payloads skip headroom + the breaker) ────────────
+def test_small_payload_skips_headroom_and_breaker(monkeypatch):
+    import mcp_server.context_engineering.compressor as comp
+
+    called = {"n": 0}
+
+    def _boom(*a, **k):
+        called["n"] += 1
+        raise RuntimeError("headroom should not be called for tiny payloads")
+
+    monkeypatch.setattr(comp, "_run_headroom", _boom)
+    before = comp._BREAKER._fail_count
+
+    payload, stats = comp.compress_payload({"a": 1, "b": "tiny"})
+    assert stats["compressed"] is False
+    assert stats["reason"] == "too_small"
+    assert called["n"] == 0                     # headroom never invoked
+    assert comp._BREAKER._fail_count == before  # breaker untouched
+
+
+def test_large_payload_attempts_headroom(monkeypatch):
+    import mcp_server.context_engineering.compressor as comp
+
+    seen = {"n": 0}
+
+    def _fake(text, model):
+        seen["n"] += 1
+        return text, 5000, 1000  # pretend big compression
+
+    monkeypatch.setattr(comp, "_run_headroom", _fake)
+    monkeypatch.setattr(comp, "_have_headroom", lambda: True)
+    big = {"blob": "x " * 5000}  # well over the token threshold
+    _payload, stats = comp.compress_payload(big)
+    assert seen["n"] == 1
+    assert stats["compressed"] is True
+
+
 # ── MCP-facing wrapper returns a compact string (no envelope) ─────────────────
 def test_wrap_tool_for_mcp_returns_compact_string():
     async def impl(symbol: str, limit: int = 5):

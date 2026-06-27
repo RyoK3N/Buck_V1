@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     # --- MCP server ---------------------------------------------------------
     mcp_http_port: int = Field(8765, env="MCP_HTTP_PORT")
     mount_mcp_in_api: bool = Field(False, env="MOUNT_MCP_IN_API")
+    # Base URLs the MCP tools use to drive / open the running Buck web app, so a
+    # session Claude starts is the same one shown in the UI (they're separate
+    # processes and don't share in-memory state).
+    buck_api_url: str = Field("http://localhost:8000", env="BUCK_API_URL")
+    buck_ui_url: str = Field("http://localhost:5173", env="BUCK_UI_URL")
 
     # --- Context engineering (headroom compression layer) -------------------
     headroom_enabled: bool = Field(True, env="HEADROOM_ENABLED")
@@ -62,6 +67,9 @@ class Settings(BaseSettings):
     headroom_price_per_mtok: float = Field(15.0, env="HEADROOM_PRICE_PER_MTOK")
     headroom_cache_ttl: float = Field(300.0, env="HEADROOM_CACHE_TTL")
     headroom_cache_maxsize: int = Field(256, env="HEADROOM_CACHE_MAXSIZE")
+    # Skip compression for payloads below this many estimated tokens (small
+    # results / realtime steps never benefit and shouldn't exercise headroom).
+    headroom_min_tokens: int = Field(800, env="HEADROOM_MIN_TOKENS")
 
     # --- Real-time intraday simulation --------------------------------------
     rt_poll_seconds: float = Field(30.0, env="RT_POLL_SECONDS")
