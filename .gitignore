@@ -14,10 +14,12 @@
 # ==============================================================================
 # Project Directories & Data
 # ==============================================================================
-# Keep the input directory, but ignore all files inside it
-input/
-input/*
-!input/.gitkeep
+# Keep the inputs directory, but ignore all files inside it.
+# NOTE: this was previously "input/" (singular) — a typo that never matched
+# the real "inputs/" directory, which is why debug prompt/JSON dumps ended
+# up committed to the repo (see SECURITY.md).
+inputs/*
+!inputs/.gitkeep
 
 # Keep the output directory, but ignore all files inside it
 output/*
@@ -26,6 +28,10 @@ output/*
 # Keep the weights directory, but ignore all files inside it
 tools/rl/weights/*
 !tools/rl/weights/.gitkeep
+
+# LSTM checkpoint cache (keyed by data fingerprint — see tools/dl/lstm_prediction.py)
+tools/dl/lstm_weights/*
+!tools/dl/lstm_weights/.gitkeep
 
 # Training-session run artifacts (keep the dir, ignore the JSON dumps)
 tools/rl/sessions/*
@@ -43,8 +49,6 @@ buck_visualizer/data-viz/
 *.mcpb
 *.dxt
 
-# Documentation (kept local, not version-controlled)
-docs/
 
 # ==============================================================================
 # Python build / tooling

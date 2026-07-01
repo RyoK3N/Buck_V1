@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getIntervals } from '../api/client'
-import type { Config } from '../types'
 
 interface Props {
-  config: Config
   onSubmit: (payload: {
     symbols: string[]
     start_date: string
@@ -12,9 +10,11 @@ interface Props {
     max_concurrent: number
   }) => void
   loading: boolean
+  /** True if either the user typed a key or the server already has one configured (.env). */
+  openaiKeyAvailable: boolean
 }
 
-export default function BatchForm({ config, onSubmit, loading }: Props) {
+export default function BatchForm({ onSubmit, loading, openaiKeyAvailable }: Props) {
   const [rawSymbols, setRawSymbols] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -36,7 +36,7 @@ export default function BatchForm({ config, onSubmit, loading }: Props) {
   }
 
   const symbols = rawSymbols.split(/[\n,]+/).map(s => s.trim()).filter(Boolean)
-  const disabled = loading || !config.openai_api_key || symbols.length === 0 || !startDate || !endDate
+  const disabled = loading || !openaiKeyAvailable || symbols.length === 0 || !startDate || !endDate
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -103,7 +103,7 @@ export default function BatchForm({ config, onSubmit, loading }: Props) {
         </label>
       </div>
 
-      {!config.openai_api_key && (
+      {!openaiKeyAvailable && (
         <p className="text-xs text-red-500">Set your OpenAI API key in the Config panel.</p>
       )}
 

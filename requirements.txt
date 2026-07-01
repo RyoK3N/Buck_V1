@@ -1,27 +1,32 @@
-pandas
-numpy
-requests
-aiohttp
-yfinance
-beautifulsoup4
-langchain-core
-openai
-python-dotenv
-nest_asyncio
-pydantic
-pydantic-settings
-scipy
-pytest
-pytest-asyncio
-matplotlib
-plotly
-torch
-yfinance
-fastapi
-uvicorn
-anthropic>=0.40.0
-mcp>=1.0.0
-apscheduler>=3.10
-websockets
+# Pinned to the versions this codebase is tested against (197/197 tests
+# passing), with the upper bound set at the next major version to allow
+# patch/minor updates (incl. security fixes) while blocking breaking major
+# bumps (e.g. a pydantic v2 -> v3 jump) from silently breaking installs.
+# Regenerate with `pip freeze` into requirements.lock for exact-reproducible
+# production installs (see SECURITY.md).
+pandas>=3.0.3,<4
+numpy>=2.5.0,<3
+requests>=2.34.2,<3
+aiohttp>=3.14.1,<4
+yfinance>=1.5.1,<2
+beautifulsoup4>=4.15.0,<5
+langchain-core>=1.4.8,<2
+openai>=2.44.0,<3
+python-dotenv>=1.2.2,<2
+nest_asyncio>=1.6.0,<2
+pydantic>=2.13.4,<3
+pydantic-settings>=2.14.2,<3
+scipy>=1.18.0,<2
+pytest>=9.1.1,<10
+pytest-asyncio>=1.4.0,<2
+matplotlib>=3.11.0,<4
+plotly>=6.8.0,<7
+torch>=2.12.1,<3
+fastapi>=0.138.2,<0.139
+uvicorn>=0.49.0,<0.50
+anthropic>=0.115.0,<0.116
+mcp>=1.28.1,<2
+apscheduler>=3.11.3,<4
+websockets>=16.0,<17
 # Context engineering — compresses MCP tool outputs to cut Claude token usage
-headroom-ai[all]
+headroom-ai[all]>=0.28.0,<0.29

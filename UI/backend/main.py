@@ -34,6 +34,9 @@ if not os.environ.get("OPENAI_API_KEY"):
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from agent_scripts.config import SETTINGS as _SETTINGS
+
+from .auth import maybe_add_auth
 from .routes import router
 
 
@@ -77,15 +80,17 @@ app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r"^http://localhost:\d+$",
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
+
+# Opt-in bearer auth — only active if BUCK_API_AUTH_TOKEN is set in .env.
+maybe_add_auth(app, _SETTINGS.buck_api_auth_token or None)
 
 app.include_router(router)
 
 # Optional: mount the FastMCP SSE app at /mcp for browser-based MCP clients.
 # Disabled by default; flip MOUNT_MCP_IN_API=true in .env to enable.
-from agent_scripts.config import SETTINGS as _SETTINGS  # noqa: E402
 if _SETTINGS.mount_mcp_in_api:
     try:
         from mcp_server.server import asgi_app as _mcp_asgi

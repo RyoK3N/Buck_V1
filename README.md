@@ -4,6 +4,12 @@ An AI-powered stock analysis agent that combines technical indicators, deep lear
 
 Buck fetches OHLCV data, runs it through a configurable set of analysis tools, feeds the structured results to an LLM (OpenAI or any compatible API), and returns a forecast with reasoning. The whole thing ships with a React UI, a FastAPI backend, and a CLI.
 
+> **Not financial advice.** Buck has no backtesting or out-of-sample validation
+> framework — every forecast's "confidence" score measures agreement between
+> its own indicator tools, not measured predictive accuracy. Don't make
+> investment decisions based solely on this output. See
+> [Known Limitations](#known-limitations).
+
 ---
 
 ## Table of Contents
@@ -20,6 +26,7 @@ Buck fetches OHLCV data, runs it through a configurable set of analysis tools, f
 - [Testing](#testing)
 - [Contributing](#contributing)
 - [Security](#security)
+- [Known Limitations](#known-limitations)
 - [License](#license)
 
 ---
@@ -163,6 +170,13 @@ from agent_scripts import set_api_keys
 set_api_keys("your-openai-key", "your-indian-key")
 ```
 
+Once a key is in `.env`, the UI and API endpoints (`/analyze`, `/batch`,
+`/claude/predict`) use it automatically — you don't need to also paste it
+into the browser. Request bodies accept an `openai_api_key` field to
+*override* the server's key per-request, but it's optional; the server
+never sends its own key value back to the browser (`GET /config` reports
+only whether one is configured, not the value — see [Security](#security)).
+
 ---
 
 ## Running the Application
@@ -262,6 +276,7 @@ All configuration is managed through environment variables (`.env` file) and loa
 | `INDIAN_API_KEY` | No | — | Indian stock news API key |
 | `LOG_LEVEL` | No | `INFO` | Logging level |
 | `OUTPUT_DIR` | No | `output` | Directory for saved results |
+| `BUCK_API_AUTH_TOKEN` | No | — | If set, the FastAPI backend requires `Authorization: Bearer <token>` on every request except `GET /health`. Leave empty for the default localhost-only workflow; set it if the backend is reachable beyond localhost. Does not cover the `/accuracy/ws` WebSocket (see `UI/backend/auth.py`). |
 
 ---
 
@@ -480,7 +495,10 @@ pytest tests/ --cov=agent_scripts --cov-report=term-missing
 | `test_version.py` | Version constant and CLI output |
 | `test_data_provider.py` | Yahoo Finance live fetch (`@pytest.mark.network`) |
 
-CI runs on every push to `main` and on pull requests, testing against Python 3.10 and 3.11 with coverage reporting. See `.github/workflows/python-package.yml`.
+CI runs on every push to `main` and on pull requests:
+- `python-package.yml` — tests against Python 3.10 and 3.11 with coverage reporting, plus a `pip-audit` dependency scan
+- Also builds the frontend (`npm ci`, `tsc --noEmit`, `npm run build`) and runs `npm audit`
+- `codeql.yml` — CodeQL static analysis across Python, JS/TS, and the GitHub Actions workflows themselves
 
 For contributor testing requirements, see [CONTRIBUTING.md](CONTRIBUTING.md#contributor-testing-requirements).
 
@@ -506,8 +524,44 @@ See [SECURITY.md](SECURITY.md) for vulnerability reporting.
 
 **Key points:**
 - Never commit API keys or `.env` files (`.gitignore` excludes them)
-- The application stores API keys in environment variables, not in code
-- LLM prompts and analysis inputs are saved to `inputs/` locally for debugging — review this directory before sharing
+- The application stores API keys in environment variables, not in code — request-supplied keys are scoped to the request that supplied them (never left set in the process for later requests to pick up)
+- `GET /config` reports whether a key is configured, not its value — the server never echoes secrets back to the browser
+- LLM prompts and analysis inputs are saved to `inputs/` locally for debugging (`.gitignore` excludes the directory's contents — only `inputs/.gitkeep` is tracked) — review this directory before sharing your project folder
+- No authentication is enabled by default (matches the localhost-dev trust model); set `BUCK_API_AUTH_TOKEN` if you expose the backend beyond localhost
+- CodeQL static analysis runs on every push/PR (`.github/workflows/codeql.yml`)
+
+---
+
+## Known Limitations
+
+Buck is a research/prototyping tool, not a production trading system. Worth
+knowing before you rely on its output:
+
+- **No backtesting or out-of-sample validation.** Indicator thresholds (RSI
+  70/30, MACD crossover, LSTM 0.6/0.4 direction cutoffs, confidence-blend
+  weights) are textbook defaults, not fitted or validated against this
+  system's actual historical accuracy. `accuracy/` only tracks *live*
+  predictions vs. later-observed actuals going forward — nothing feeds that
+  back into recalibrating the pipeline.
+- **Confidence scores measure signal agreement, not accuracy.** A forecast's
+  confidence reflects how many indicator tools agree and ran without error,
+  not how often that combination has been historically correct.
+- **The LSTM tool caches trained weights by a fingerprint of its input data**
+  (`tools/dl/lstm_prediction.py`) so repeat calls on the same window don't
+  retrain from scratch, but each fingerprint is still trained fresh the
+  first time it's seen — there's no cross-session model persistence or
+  incremental learning.
+- **`tools/ml/`, `tools/utility/`, and `tools/web/` are unimplemented** —
+  each directory has a `readme.md` spec but no working tools yet (see
+  [Contributing](#contributing)). `tools/dl/time_llm.py` is also an
+  unimplemented placeholder.
+- **The dynamic tool loader (`ToolFactory`) executes any `.py` file dropped
+  into `tools/*/`** with no sandboxing or signature verification — only
+  place trusted code there (see [SECURITY.md](SECURITY.md)).
+- **No authentication by default.** The FastAPI backend and the MCP
+  HTTP/SSE transports assume a trusted-localhost environment unless you set
+  `BUCK_API_AUTH_TOKEN` (backend only — the MCP server and the
+  `/accuracy/ws` WebSocket have no auth option yet).
 
 ---
 

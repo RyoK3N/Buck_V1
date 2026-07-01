@@ -25,30 +25,41 @@ function load(): Config {
 
 interface Props {
   onChange: (cfg: Config) => void
+  onServerKeyStatus?: (status: { openai: boolean; indian: boolean }) => void
 }
 
-export default function ConfigPanel({ onChange }: Props) {
+export default function ConfigPanel({ onChange, onServerKeyStatus }: Props) {
   const [cfg, setCfg] = useState<Config>(load)
   const [dotenvLoaded, setDotenvLoaded] = useState(false)
+  // Whether the server already has its own key configured (from .env) — if
+  // so, the key fields below can stay blank and requests will fall back to
+  // it server-side. The server never sends the actual secret to the browser.
+  const [serverHasOpenAIKey, setServerHasOpenAIKey] = useState(false)
+  const [serverHasIndianKey, setServerHasIndianKey] = useState(false)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
+  const onServerKeyStatusRef = useRef(onServerKeyStatus)
+  onServerKeyStatusRef.current = onServerKeyStatus
 
-  // Auto-load from server .env on first mount.
-  // Always overwrite with server values on first load of a new session.
-  // After the first successful load we set a flag so subsequent mounts
-  // (e.g. React strict-mode remount) don't clobber user edits.
+  // Auto-load from server .env on first mount. The server config endpoint
+  // only reports whether a key is configured, not its value — model/base
+  // URL are non-secret and still get pre-filled.
   useEffect(() => {
     const alreadyLoaded = sessionStorage.getItem(LOADED_FLAG)
     getServerConfig()
       .then(server => {
+        setServerHasOpenAIKey(server.openai_api_key_configured)
+        setServerHasIndianKey(server.indian_api_key_configured)
+        onServerKeyStatusRef.current?.({
+          openai: server.openai_api_key_configured,
+          indian: server.indian_api_key_configured,
+        })
         if (!alreadyLoaded) {
-          // First load — server values take priority
-          // Keep any Anthropic key already in session (sessionStorage may have been edited).
           const existing = load()
           const merged: Config = {
-            openai_api_key: server.openai_api_key || '',
-            indian_api_key: server.indian_api_key || '',
-            model:          server.chat_model     || DEFAULTS.model,
+            openai_api_key: existing.openai_api_key || '',
+            indian_api_key: existing.indian_api_key || '',
+            model:          server.chat_model      || DEFAULTS.model,
             base_url:       server.openai_base_url || '',
             anthropic_api_key: existing.anthropic_api_key || '',
             claude_model:      existing.claude_model      || DEFAULTS.claude_model,
@@ -86,22 +97,36 @@ export default function ConfigPanel({ onChange }: Props) {
       </div>
 
       <label className="flex flex-col gap-1">
-        <span className="text-xs font-medium text-gray-700">OpenAI / OpenRouter API Key *</span>
+        <span className="text-xs font-medium text-gray-700">
+          OpenAI / OpenRouter API Key {serverHasOpenAIKey ? '' : '*'}
+          {serverHasOpenAIKey && (
+            <span className="ml-1 rounded bg-green-50 px-1.5 py-0.5 text-[10px] font-normal text-green-700">
+              using server key
+            </span>
+          )}
+        </span>
         <input
           type="password"
           className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder="sk-... or sk-or-v1-..."
+          placeholder={serverHasOpenAIKey ? 'leave blank to use the server key' : 'sk-... or sk-or-v1-...'}
           value={cfg.openai_api_key}
           onChange={e => set('openai_api_key', e.target.value)}
         />
       </label>
 
       <label className="flex flex-col gap-1">
-        <span className="text-xs font-medium text-gray-700">Indian API Key</span>
+        <span className="text-xs font-medium text-gray-700">
+          Indian API Key
+          {serverHasIndianKey && (
+            <span className="ml-1 rounded bg-green-50 px-1.5 py-0.5 text-[10px] font-normal text-green-700">
+              using server key
+            </span>
+          )}
+        </span>
         <input
           type="password"
           className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder="sk-live-... (optional)"
+          placeholder={serverHasIndianKey ? 'leave blank to use the server key' : 'sk-live-... (optional)'}
           value={cfg.indian_api_key}
           onChange={e => set('indian_api_key', e.target.value)}
         />

@@ -116,13 +116,29 @@ class TechnicalAnalyzer(IAnalyzer):
                 key_metrics['bullish_score'] = result.get('bullish_score', 0)
                 key_metrics['bearish_score'] = result.get('bearish_score', 0)
         
-        # Determine overall signal
-        max_signal = max(signals, key=signals.get)
+        # Determine overall signal. Picking the bare argmax over BUY/SELL/HOLD
+        # strength sums means a BUY that barely edges out HOLD (e.g. 0.11 vs
+        # 0.10) gets reported identically to a BUY that wins by a landslide —
+        # the margin is real information the LLM downstream never sees.
+        # Require the leading signal to clear the runner-up by a minimum
+        # share of total strength; otherwise it's a toss-up and HOLD is the
+        # honest answer.
+        MIN_SIGNAL_MARGIN = 0.10  # as a fraction of total aggregated strength
+        ranked = sorted(signals.items(), key=lambda kv: kv[1], reverse=True)
+        leader, leader_strength = ranked[0]
+        runner_up_strength = ranked[1][1] if len(ranked) > 1 else 0.0
+        margin = (leader_strength - runner_up_strength) / (total_strength or 1)
+
+        if leader != 'HOLD' and margin < MIN_SIGNAL_MARGIN:
+            max_signal = 'HOLD'
+        else:
+            max_signal = leader
         signal_strength = float(signals[max_signal] / (total_strength or 1))
-        
+
         return {
             'overall_signal': max_signal,
             'signal_strength': signal_strength,
+            'signal_margin': float(margin),
             'signals_breakdown': {k: float(v) for k, v in signals.items()},
             'key_metrics': key_metrics,
             'tools_processed': valid_tools,
