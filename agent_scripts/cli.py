@@ -143,7 +143,9 @@ async def run_single_analysis(args) -> None:
         print("-" * 20)
         print(f"Analysis: {metadata['analysis_confidence']:.2f}")
         print(f"Prediction: {metadata['prediction_confidence']:.2f}")
-        
+
+        print(f"\n⚠️  {results.get('disclaimer', 'Not financial advice.')}")
+
         if not args.no_save:
             print(f"\n💾 Results saved to output directory")
             print(f"🔍 OpenAI input data saved to inputs directory for inspection")
@@ -201,7 +203,9 @@ async def run_batch_analysis(args) -> None:
                     print(f"{symbol}: ₹{forecast['close']:.2f} (conf: {confidence:.2f})")
             else:
                 print(f"{symbol}: ❌ No result")
-        
+
+        print(f"\n⚠️  {results.get('disclaimer', 'Not financial advice.')}")
+
         # Save batch results
         if args.output:
             output_dir = Path(args.output)

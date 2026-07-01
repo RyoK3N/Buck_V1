@@ -62,6 +62,10 @@ class Settings(BaseSettings):
     # When true, MCP realtime tools auto-launch `python main.py` if the web app
     # isn't already running (set BUCK_AUTOSTART=0 to require a manual start).
     buck_autostart: bool = Field(True, env="BUCK_AUTOSTART")
+    # Optional: require `Authorization: Bearer <token>` on the FastAPI
+    # backend. Unset (default) means no auth — fine for localhost-only use;
+    # set this if the backend is reachable beyond localhost.
+    buck_api_auth_token: str = Field("", env="BUCK_API_AUTH_TOKEN")
 
     # --- Context engineering (headroom compression layer) -------------------
     headroom_enabled: bool = Field(True, env="HEADROOM_ENABLED")

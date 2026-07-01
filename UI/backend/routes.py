@@ -13,8 +13,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
-logger = logging.getLogger(__name__)
-
+from ._env_scope import temporary_env
 from .models import (
     AnalyzeRequest,
     BatchRequest,
@@ -62,17 +61,45 @@ from .models import (
     RTSessionsResponse,
 )  # noqa: F401
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 VALID_INTERVALS = ["1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h",
                    "1d", "5d", "1wk", "1mo", "3mo"]
 
 
+def _internal_error(exc: Exception, context: str) -> HTTPException:
+    """Log the full exception server-side; return a client-safe 500.
+
+    Returning str(exc) directly to callers leaks stack traces, file paths,
+    and library internals. Callers only need to know something failed and
+    where to look (server logs).
+    """
+    logger.error("%s failed: %s\n%s", context, exc, traceback.format_exc())
+    return HTTPException(status_code=500, detail=f"{context} failed — see server logs for details.")
+
+
+def _resolve_openai_key(requested: str | None) -> str:
+    """Use the request's key if given, else the server's own .env key.
+
+    Keeps the browser from ever having to round-trip a server-configured
+    secret just to fill out a form field.
+    """
+    from agent_scripts.config import SETTINGS
+    key = requested or SETTINGS.openai_api_key
+    if not key or key == "__placeholder__":
+        raise HTTPException(
+            status_code=400,
+            detail="No OPENAI_API_KEY configured on the server and none was provided in the request.",
+        )
+    return key
+
+
 def _make_buck(req: AnalyzeRequest | BatchRequest):
     """Instantiate Buck with per-request API keys."""
     from agent_scripts.buck import BuckFactory
     return BuckFactory.create_production_agent(
-        openai_api_key=req.openai_api_key,
+        openai_api_key=_resolve_openai_key(req.openai_api_key),
         indian_api_key=req.indian_api_key or "",
         model=req.model or "gpt-4o",
         base_url=req.base_url or None,
@@ -91,17 +118,18 @@ async def health() -> HealthResponse:
 
 @router.get("/config", response_model=ConfigResponse)
 async def get_config() -> ConfigResponse:
-    """Return server config loaded from .env (used by the UI to pre-fill forms)."""
+    """Return server config loaded from .env (used by the UI to pre-fill forms).
+
+    Never echoes secret values back to the client — only whether each key is
+    configured. The UI only needs this to decide whether to show "using
+    server key" vs. prompting the user for one.
+    """
     from agent_scripts.config import SETTINGS
     return ConfigResponse(
-        openai_api_key=(
-            SETTINGS.openai_api_key
-            if SETTINGS.openai_api_key != "__placeholder__"
-            else ""
-        ),
+        openai_api_key_configured=SETTINGS.openai_api_key not in ("", "__placeholder__"),
         openai_base_url=SETTINGS.openai_base_url,
         chat_model=SETTINGS.chat_model,
-        indian_api_key=SETTINGS.indian_api_key,
+        indian_api_key_configured=bool(SETTINGS.indian_api_key),
     )
 
 
@@ -140,10 +168,8 @@ async def tools_registry() -> ToolsRegistryResponse:
 
 @router.post("/analyze")
 async def analyze(req: AnalyzeRequest) -> Dict[str, Any]:
-    os.environ["OPENAI_API_KEY"] = req.openai_api_key
-    if req.indian_api_key:
-        os.environ["INDIAN_API_KEY"] = req.indian_api_key
-
+    # Keys are passed explicitly to BuckFactory below — no need to touch
+    # process-wide os.environ for this path.
     logger.info("POST /analyze  symbol=%s  selected_tools=%s", req.symbol, req.selected_tools)
     try:
         buck = _make_buck(req)
@@ -155,16 +181,14 @@ async def analyze(req: AnalyzeRequest) -> Dict[str, Any]:
             save_results=False,
         )
         return result
+    except HTTPException:
+        raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise _internal_error(exc, "Analysis")
 
 
 @router.post("/batch")
 async def batch(req: BatchRequest) -> Dict[str, Any]:
-    os.environ["OPENAI_API_KEY"] = req.openai_api_key
-    if req.indian_api_key:
-        os.environ["INDIAN_API_KEY"] = req.indian_api_key
-
     try:
         buck = _make_buck(req)
         result = await buck.batch_analyze(
@@ -175,8 +199,10 @@ async def batch(req: BatchRequest) -> Dict[str, Any]:
             max_concurrent=req.max_concurrent or 3,
         )
         return result
+    except HTTPException:
+        raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise _internal_error(exc, "Batch analysis")
 
 
 # ── Visualizer ────────────────────────────────────────────────────────────────
@@ -209,7 +235,7 @@ async def visualize(req: VisualizeRequest) -> VisualizeResponse:
             description=CHART_DESCRIPTIONS.get(req.chart_type, ""),
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise _internal_error(exc, "Chart generation")
 
 
 # ── d3 training-session observability ────────────────────────────────────────
@@ -334,8 +360,7 @@ async def _rl_train_ppo_continuous(req) -> Dict[str, Any]:
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error("PPO-continuous train error: %s\n%s", exc, traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise _internal_error(exc, "PPO-continuous training")
 
 
 async def _rl_predict_ppo_continuous(req) -> Dict[str, Any]:
@@ -404,14 +429,19 @@ async def _rl_predict_ppo_continuous(req) -> Dict[str, Any]:
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error("PPO-continuous predict error: %s\n%s", exc, traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise _internal_error(exc, "PPO-continuous prediction")
 
 
 @router.post("/rl/train")
 async def rl_train(req: RLTrainRequest) -> Dict[str, Any]:
-    if req.indian_api_key:
-        os.environ["INDIAN_API_KEY"] = req.indian_api_key
+    # tools.rl.rl_tool.fetch_historical_data reads INDIAN_API_KEY from
+    # os.environ rather than taking it as a parameter — scope the mutation to
+    # this request instead of leaving it set process-wide.
+    async with temporary_env(INDIAN_API_KEY=req.indian_api_key):
+        return await _rl_train_impl(req)
+
+
+async def _rl_train_impl(req: RLTrainRequest) -> Dict[str, Any]:
     logger.info("POST /rl/train  symbol=%s  model_id=%s  algorithm=%s  episodes=%d",
                 req.symbol, req.model_id, req.algorithm, req.episodes)
     if req.algorithm == "ppo_continuous":
@@ -503,14 +533,16 @@ async def rl_train(req: RLTrainRequest) -> Dict[str, Any]:
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error("RL train error: %s\n%s", exc, traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise _internal_error(exc, "RL training")
 
 
 @router.post("/rl/predict")
 async def rl_predict(req: RLPredictRequest) -> Dict[str, Any]:
-    if req.indian_api_key:
-        os.environ["INDIAN_API_KEY"] = req.indian_api_key
+    async with temporary_env(INDIAN_API_KEY=req.indian_api_key):
+        return await _rl_predict_impl(req)
+
+
+async def _rl_predict_impl(req: RLPredictRequest) -> Dict[str, Any]:
     logger.info("POST /rl/predict  symbol=%s  model_id=%s", req.symbol, req.model_id)
     # Auto-detect PPO-continuous checkpoints and use the continuous code path.
     # NOTE: only swallow errors from the *detection* itself; once we've decided
@@ -572,8 +604,7 @@ async def rl_predict(req: RLPredictRequest) -> Dict[str, Any]:
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error("RL predict error: %s\n%s", exc, traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise _internal_error(exc, "RL prediction")
 
 
 @router.get("/rl/models", response_model=RLModelsResponse)
@@ -585,8 +616,11 @@ async def rl_models() -> RLModelsResponse:
 @router.post("/rl/ensemble-predict")
 async def rl_ensemble_predict(req: RLEnsembleRequest) -> Dict[str, Any]:
     """Multi-timeframe ensemble inference. See tools.rl.ensemble for details."""
-    if req.indian_api_key:
-        os.environ["INDIAN_API_KEY"] = req.indian_api_key
+    async with temporary_env(INDIAN_API_KEY=req.indian_api_key):
+        return await _rl_ensemble_predict_impl(req)
+
+
+async def _rl_ensemble_predict_impl(req: RLEnsembleRequest) -> Dict[str, Any]:
     logger.info("POST /rl/ensemble-predict  symbol=%s  n_models=%d", req.symbol, len(req.models))
     try:
         from tools.rl.ensemble import ensemble_predict
@@ -599,8 +633,7 @@ async def rl_ensemble_predict(req: RLEnsembleRequest) -> Dict[str, Any]:
         )
         return result
     except Exception as exc:
-        logger.error("RL ensemble error: %s\n%s", exc, traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise _internal_error(exc, "RL ensemble prediction")
 
 
 @router.delete("/rl/models/{model_id}")
@@ -707,17 +740,28 @@ async def claude_predict(req: ClaudePredictRequest) -> Dict[str, Any]:
     anthropic_key = req.anthropic_api_key or SETTINGS.anthropic_api_key
     if not anthropic_key:
         raise HTTPException(status_code=400, detail="ANTHROPIC_API_KEY required (in request body or .env)")
+    openai_key = _resolve_openai_key(req.openai_api_key)
 
-    os.environ["OPENAI_API_KEY"] = req.openai_api_key
-    if req.indian_api_key:
-        os.environ["INDIAN_API_KEY"] = req.indian_api_key
-    os.environ["ANTHROPIC_API_KEY"] = anthropic_key
+    # Claude's tool-calling loop dispatches through mcp_server.tools, which
+    # resolves keys from os.environ as a fallback when a tool call doesn't
+    # carry them explicitly — scope the mutation to this request only.
+    async with temporary_env(
+        OPENAI_API_KEY=openai_key,
+        INDIAN_API_KEY=req.indian_api_key,
+        ANTHROPIC_API_KEY=anthropic_key,
+    ):
+        return await _claude_predict_impl(req, openai_key, anthropic_key)
+
+
+async def _claude_predict_impl(req: ClaudePredictRequest, openai_key: str, anthropic_key: str) -> Dict[str, Any]:
+    from agent_scripts.buck import Buck, BuckFactory
+    from agent_scripts.predictors import PredictorFactory
 
     try:
         # Build a Buck wired with the Claude predictor (analyzer still runs to
         # produce the seed analysis the predictor receives).
         base = BuckFactory.create_production_agent(
-            openai_api_key=req.openai_api_key,
+            openai_api_key=openai_key,
             indian_api_key=req.indian_api_key or "",
             model="gpt-4o",
             base_url=req.base_url,
@@ -746,8 +790,7 @@ async def claude_predict(req: ClaudePredictRequest) -> Dict[str, Any]:
         result.setdefault("metadata", {})["tool_trace"] = getattr(claude_predictor, "last_trace", [])
         return result
     except Exception as exc:
-        logger.error("Claude predict error: %s\n%s", exc, traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise _internal_error(exc, "Claude prediction")
 
 
 @router.post("/claude/chat", response_model=ClaudeChatResponse)
@@ -787,7 +830,7 @@ async def claude_chat(req: ClaudeChatRequest) -> ClaudeChatResponse:
                 messages=messages,
             )
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"Anthropic call failed: {exc}")
+            raise _internal_error(exc, "Anthropic call")
 
         messages.append({"role": "assistant", "content": [b.model_dump() for b in response.content]})
 
@@ -919,8 +962,7 @@ def _coerce_row(row: Dict[str, Any]) -> Dict[str, Any]:
 
 @router.post("/rl/simulate")
 async def rl_simulate(req: RLSimulateRequest) -> Dict[str, Any]:
-    if req.indian_api_key:
-        os.environ["INDIAN_API_KEY"] = req.indian_api_key
+    # fetch_live_data takes the key explicitly below — no env mutation needed.
     logger.info("POST /rl/simulate  symbol=%s  model_id=%s", req.symbol, req.model_id)
     try:
         from tools.rl.dqn_agent import load_agent, extract_state
@@ -928,7 +970,6 @@ async def rl_simulate(req: RLSimulateRequest) -> Dict[str, Any]:
         from tools.rl.wallet import Wallet
         agent = load_agent(req.model_id)
         if agent is None:
-            raise HTTPException(status_code=404, detail=f"Model {req.model_id} not found")
             raise HTTPException(status_code=404, detail=f"Model {req.model_id} not found")
         api_key = req.indian_api_key or os.environ.get("INDIAN_API_KEY", "")
         live = fetch_live_data(req.symbol, api_key)
@@ -967,8 +1008,7 @@ async def rl_simulate(req: RLSimulateRequest) -> Dict[str, Any]:
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error("RL simulate error: %s\n%s", exc, traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise _internal_error(exc, "RL simulation")
 
 
 # ── Realtime intraday session: monitor + run controls ──────────────────────────
@@ -1019,8 +1059,10 @@ async def rt_chart(symbol: str | None = None, chart: str = "equity_curve") -> Di
 async def rt_start(req: RTStartRequest) -> RTStatusResponse:
     """Start a realtime simulation in a background thread (use replay for off-hours)."""
     from realtime.runner import MANAGER
-    if req.indian_api_key:
-        os.environ["INDIAN_API_KEY"] = req.indian_api_key
+    # indian_api_key is passed explicitly to MANAGER.start() below — no env
+    # mutation needed (the session runs in a background thread, so a
+    # request-scoped env var would go out of scope while the session is
+    # still running).
     logger.info("POST /rt/start  symbol=%s  model_id=%s  replay=%s", req.symbol, req.model_id, req.replay)
     try:
         status = MANAGER.start(
@@ -1040,8 +1082,7 @@ async def rt_start(req: RTStartRequest) -> RTStatusResponse:
     except (ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     except Exception as exc:  # noqa: BLE001
-        logger.error("rt_start error: %s\n%s", exc, traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise _internal_error(exc, "Realtime session start")
 
 
 @router.post("/rt/stop", response_model=RTStatusResponse)

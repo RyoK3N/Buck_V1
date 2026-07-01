@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getIntervals } from '../api/client'
-import type { Config } from '../types'
 
 interface Props {
-  config: Config
   onSubmit: (payload: {
     symbol: string
     start_date: string
@@ -11,9 +9,11 @@ interface Props {
     interval: string
   }) => void
   loading: boolean
+  /** True if either the user typed a key or the server already has one configured (.env). */
+  openaiKeyAvailable: boolean
 }
 
-export default function AnalysisForm({ config, onSubmit, loading }: Props) {
+export default function AnalysisForm({ onSubmit, loading, openaiKeyAvailable }: Props) {
   const [symbol, setSymbol] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -29,7 +29,7 @@ export default function AnalysisForm({ config, onSubmit, loading }: Props) {
     onSubmit({ symbol, start_date: startDate, end_date: endDate, interval })
   }
 
-  const disabled = loading || !config.openai_api_key || !symbol || !startDate || !endDate
+  const disabled = loading || !openaiKeyAvailable || !symbol || !startDate || !endDate
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -78,7 +78,7 @@ export default function AnalysisForm({ config, onSubmit, loading }: Props) {
         </label>
       </div>
 
-      {!config.openai_api_key && (
+      {!openaiKeyAvailable && (
         <p className="text-xs text-red-500">Set your OpenAI API key in the Config panel.</p>
       )}
 

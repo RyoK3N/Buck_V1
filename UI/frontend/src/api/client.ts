@@ -35,7 +35,8 @@ export interface AnalyzeRequest {
   start_date: string
   end_date: string
   interval: string
-  openai_api_key: string
+  // Omit/blank to use the server's own OPENAI_API_KEY (from .env).
+  openai_api_key?: string
   indian_api_key?: string
   model?: string
   base_url?: string
@@ -47,7 +48,7 @@ export interface BatchRequest {
   start_date: string
   end_date: string
   interval: string
-  openai_api_key: string
+  openai_api_key?: string
   indian_api_key?: string
   model?: string
   base_url?: string
@@ -142,7 +143,7 @@ export interface ClaudePredictRequestBody {
   start_date: string
   end_date: string
   interval: string
-  openai_api_key: string
+  openai_api_key?: string
   indian_api_key?: string
   anthropic_api_key?: string
   claude_model?: string

@@ -1,17 +1,24 @@
-# Lightweight wrapper based on TimeLLM reference implementation, with some modifications to fit the Buck project context and Reinforcement Learning (RL) use case. This wrapper is designed to provide a simple interface for interacting with the TimeLLM model, allowing for easy integration into the Buck project.
+"""TimeLLM tool — NOT IMPLEMENTED.
 
+This file is a design placeholder, not a working tool. It exports no
+`TOOL_CLASS`/`TOOL_FUNC`, so `ToolFactory` does not register it and it is
+not invokable from the UI, CLI, or MCP server — unlike `lstm_prediction.py`
+in this same directory, which is a real, working tool.
 
-##Data Engineering and Preprocessing Layer: This layer is responsible for preparing the input data for the TimeLLM model. It includes functions for data cleaning, normalization, and feature extraction. The goal is to ensure that the input data is in the right format and quality for the model to make accurate predictions.
-##Historical Data Preprocessing: Functions to clean and normalize historical stock data, including handling missing values, outliers, and scaling features.
-##Data preprocessing for realtime streaming data: Functions to preprocess incoming realtime data, ensuring it is compatible with the model's input requirements.
-##Feature Building Layer: Functions to create additional features from the raw data, such as technical indicators, moving averages, and other derived metrics that can enhance the model's predictive capabilities along with addign context to the time series data which is important for the TimeLLM model to understand the temporal dependencies in the data.
-##Data Compression Layer: High performance functions(probably C++ wrapper) to compress the input data and map it to a lower-dimensional representation, reducing the computational load on the model while preserving important information. 
-##Compression Mapping Layer: Functions to map the compressed data back to the original feature space, allowing for interpretability and analysis of the model's predictions.
-##Warmup and Initialization Layer: Functions to initialize the model's parameters and perform any necessary warmup steps before making predictions, ensuring that the model is ready for inference.
-##Reinforcement Learning Integration Layer: Functions to integrate the TimeLLM model with the RL framework, allowing for seamless interaction between the model and the RL agent. This includes functions for updating the model's parameters based on feedback from the RL environment and for generating predictions that can be used by the RL agent to make decisions.
-##Training and Fine-tuning Layer: Functions to train and fine-tune the TimeLLM model on historical data, allowing for customization and optimization of the model's performance for specific tasks or datasets. This includes functions for hyperparameter tuning, model evaluation, and performance monitoring.
-##Validation and Testing Layer: Functions to validate and test the TimeLLM model's performance on unseen data, ensuring that the model generalizes well and provides accurate predictions. This includes functions for cross-validation, performance metrics calculation, and error analysis.
-##A2A policy layer: policy layer for Claude to use the model in an A2A manner, allowing for interactive and adaptive decision-making based on the model's predictions and the RL agent's feedback. This includes functions for generating action recommendations, evaluating the impact of actions, and updating the policy based on observed outcomes.
-##Simulation and Replay Layer: Functions to simulate the model's predictions and replay historical scenarios, allowing for analysis and evaluation of the model's performance in different market conditions. This includes functions for scenario generation, backtesting, and performance visualization.
+Planned design notes (kept for whoever picks this up):
+  - Data engineering/preprocessing layer: cleaning, normalization, feature
+    extraction for both historical and realtime-streaming input.
+  - Feature building layer: technical-indicator features + temporal context
+    for the TimeLLM backbone.
+  - Compression layer: map input to a lower-dimensional representation to
+    reduce backbone compute, with a corresponding decompression/mapping-back
+    layer for interpretability.
+  - Warmup/initialization, training/fine-tuning, and validation/testing
+    layers for the backbone itself.
+  - RL integration layer: expose predictions/updates to tools/rl's agents.
+  - A2A policy layer: let Claude drive the model interactively via MCP.
+  - Simulation/replay layer: backtest predictions over historical scenarios.
 
-
+See CONTRIBUTING.md for the tool contract (`TOOL_CLASS` + `TOOL_FUNC`) a
+working implementation needs to follow.
+"""

@@ -73,10 +73,13 @@ export interface Config {
 }
 
 export interface ServerConfig {
-  openai_api_key: string
+  // The server never sends key values back — only whether one is configured
+  // server-side (from .env), so the UI can leave the field blank and let
+  // requests fall back to the server's own key instead of round-tripping it.
+  openai_api_key_configured: boolean
   openai_base_url: string | null
   chat_model: string
-  indian_api_key: string
+  indian_api_key_configured: boolean
 }
 
 export interface ChartTypeInfo {
