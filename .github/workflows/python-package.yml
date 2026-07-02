@@ -28,8 +28,14 @@ jobs:
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
         pip install pytest-cov pip-audit
     - name: Run tests
+      # Coverage spans every Python package that ships in the app — not just
+      # agent_scripts — so regressions in the API surface, accuracy tracking,
+      # realtime sessions, MCP server, and tool implementations all show up.
       run: |
-        pytest tests/ -v --tb=short -m "not network" --cov=agent_scripts --cov-report=term-missing
+        pytest tests/ -v --tb=short -m "not network" \
+          --cov=agent_scripts --cov=accuracy --cov=realtime \
+          --cov=mcp_server --cov=UI/backend --cov=tools \
+          --cov-report=term-missing
     - name: Audit Python dependencies for known CVEs
       # Informational for now (continue-on-error) — flips to a hard gate once
       # the existing dependency tree's known advisories are triaged.

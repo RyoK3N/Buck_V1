@@ -24,10 +24,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 _EXEMPT_PATHS = {"/health"}
 
 # NOTE: Starlette's BaseHTTPMiddleware only wraps HTTP request/response
-# scopes — it does not run for WebSocket connections. /accuracy/ws is
-# therefore NOT covered by this middleware even when a token is configured.
-# If you expose the API beyond localhost, put it behind a reverse proxy that
-# also gates the WebSocket route (or disable that endpoint).
+# scopes — it does not run for WebSocket connections. /accuracy/ws therefore
+# enforces the same token itself before accepting the handshake (see
+# routes.py: accuracy_ws), via the Authorization header or a `?token=` query
+# param for browser clients that can't set custom handshake headers.
 
 
 class BearerAuthMiddleware(BaseHTTPMiddleware):

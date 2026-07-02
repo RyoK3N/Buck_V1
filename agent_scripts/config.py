@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     # backend. Unset (default) means no auth — fine for localhost-only use;
     # set this if the backend is reachable beyond localhost.
     buck_api_auth_token: str = Field("", env="BUCK_API_AUTH_TOKEN")
+    # Requests/minute per client IP to the expensive endpoints (/analyze,
+    # /batch, /claude/*, /rl/*, /mcp/invoke) — each of those is an LLM call
+    # or a training run, i.e. real money/CPU per request. 0 disables.
+    buck_rate_limit_per_minute: int = Field(30, env="BUCK_RATE_LIMIT_PER_MINUTE")
 
     # --- Context engineering (headroom compression layer) -------------------
     headroom_enabled: bool = Field(True, env="HEADROOM_ENABLED")

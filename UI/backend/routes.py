@@ -930,7 +930,7 @@ async def mcp_invoke(req: MCPInvokeRequest) -> MCPInvokeResponse:
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise _internal_error(exc, f"MCP tool {req.tool!r}")
     return MCPInvokeResponse(
         tool=req.tool,
         result=result,
@@ -941,6 +941,19 @@ async def mcp_invoke(req: MCPInvokeRequest) -> MCPInvokeResponse:
 @router.websocket("/accuracy/ws")
 async def accuracy_ws(ws: WebSocket) -> None:
     from accuracy.broadcaster import subscribe, unsubscribe, snapshot
+    # BaseHTTPMiddleware (the bearer-auth layer) only covers HTTP scopes, so
+    # enforce the same token here. Browsers can't set headers on WebSocket
+    # handshakes, so a `?token=` query param is accepted as the equivalent.
+    from agent_scripts.config import SETTINGS as _settings
+    required = _settings.buck_api_auth_token
+    if required:
+        import hmac as _hmac
+        header = ws.headers.get("authorization", "")
+        _, _, header_token = header.partition(" ")
+        supplied = header_token or ws.query_params.get("token", "")
+        if not _hmac.compare_digest(supplied, required):
+            await ws.close(code=1008, reason="Unauthorized")
+            return
     await ws.accept()
     q = await subscribe()
     try:

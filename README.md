@@ -4,11 +4,11 @@ An AI-powered stock analysis agent that combines technical indicators, deep lear
 
 Buck fetches OHLCV data, runs it through a configurable set of analysis tools, feeds the structured results to an LLM (OpenAI or any compatible API), and returns a forecast with reasoning. The whole thing ships with a React UI, a FastAPI backend, and a CLI.
 
-> **Not financial advice.** Buck has no backtesting or out-of-sample validation
-> framework — every forecast's "confidence" score measures agreement between
-> its own indicator tools, not measured predictive accuracy. Don't make
-> investment decisions based solely on this output. See
-> [Known Limitations](#known-limitations).
+> **Not financial advice.** Every forecast's "confidence" score measures
+> agreement between Buck's own indicator tools, not measured predictive
+> accuracy — validate against history with `accuracy/backtest.py` before
+> trusting any signal. Don't make investment decisions based solely on this
+> output. See [Known Limitations](#known-limitations).
 
 ---
 
@@ -276,7 +276,8 @@ All configuration is managed through environment variables (`.env` file) and loa
 | `INDIAN_API_KEY` | No | — | Indian stock news API key |
 | `LOG_LEVEL` | No | `INFO` | Logging level |
 | `OUTPUT_DIR` | No | `output` | Directory for saved results |
-| `BUCK_API_AUTH_TOKEN` | No | — | If set, the FastAPI backend requires `Authorization: Bearer <token>` on every request except `GET /health`. Leave empty for the default localhost-only workflow; set it if the backend is reachable beyond localhost. Does not cover the `/accuracy/ws` WebSocket (see `UI/backend/auth.py`). |
+| `BUCK_API_AUTH_TOKEN` | No | — | If set, the FastAPI backend requires `Authorization: Bearer <token>` on every request except `GET /health`. The `/accuracy/ws` WebSocket enforces the same token (header or `?token=` query param). Leave empty for the default localhost-only workflow; set it if the backend is reachable beyond localhost. |
+| `BUCK_RATE_LIMIT_PER_MINUTE` | No | `30` | Requests/minute per client IP to the expensive endpoints (`/analyze`, `/batch`, `/claude/*`, `/rl/*`, `/mcp/invoke`) — each of those is an LLM call or a training run. `0` disables the limiter. |
 
 ---
 
@@ -466,6 +467,20 @@ python -m agent_scripts.cli analyze BHEL.NS \
     --api-key your-key
 ```
 
+### Walk-forward backtesting
+
+Validate the technical-signal pipeline against history before trusting it —
+each anchor's signal is produced from data up to that bar only, then scored
+against the realized forward return:
+
+```bash
+python -m accuracy.backtest RELIANCE.NS --start 2024-01-01 --end 2024-06-30
+```
+
+Reports hit-rate per signal, overall directional accuracy, and confidence
+calibration (mean confidence on hits vs. misses). Also available as a library
+function: `from accuracy.backtest import walk_forward`.
+
 ---
 
 ## Testing
@@ -537,12 +552,14 @@ See [SECURITY.md](SECURITY.md) for vulnerability reporting.
 Buck is a research/prototyping tool, not a production trading system. Worth
 knowing before you rely on its output:
 
-- **No backtesting or out-of-sample validation.** Indicator thresholds (RSI
+- **Forecasts are not validated by default.** Indicator thresholds (RSI
   70/30, MACD crossover, LSTM 0.6/0.4 direction cutoffs, confidence-blend
-  weights) are textbook defaults, not fitted or validated against this
-  system's actual historical accuracy. `accuracy/` only tracks *live*
-  predictions vs. later-observed actuals going forward — nothing feeds that
-  back into recalibrating the pipeline.
+  weights) are textbook defaults, not fitted to this system's actual
+  historical accuracy. A walk-forward validation harness exists
+  (`accuracy/backtest.py` — see below) to measure hit-rates and confidence
+  calibration offline, but nothing recalibrates the pipeline automatically;
+  `accuracy/` tracks *live* predictions vs. later-observed actuals going
+  forward.
 - **Confidence scores measure signal agreement, not accuracy.** A forecast's
   confidence reflects how many indicator tools agree and ran without error,
   not how often that combination has been historically correct.
@@ -558,10 +575,13 @@ knowing before you rely on its output:
 - **The dynamic tool loader (`ToolFactory`) executes any `.py` file dropped
   into `tools/*/`** with no sandboxing or signature verification — only
   place trusted code there (see [SECURITY.md](SECURITY.md)).
-- **No authentication by default.** The FastAPI backend and the MCP
-  HTTP/SSE transports assume a trusted-localhost environment unless you set
-  `BUCK_API_AUTH_TOKEN` (backend only — the MCP server and the
-  `/accuracy/ws` WebSocket have no auth option yet).
+- **No authentication by default.** The FastAPI backend (including the
+  `/accuracy/ws` WebSocket) assumes a trusted-localhost environment unless
+  you set `BUCK_API_AUTH_TOKEN`; the MCP HTTP/SSE transport has no auth
+  option yet — keep it bound to localhost or gate it upstream.
+
+A full audit of past findings lives in [Issues.md](Issues.md); the
+remediation record for each finding is in [FIXES.md](FIXES.md).
 
 ---
 

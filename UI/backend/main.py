@@ -37,6 +37,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from agent_scripts.config import SETTINGS as _SETTINGS
 
 from .auth import maybe_add_auth
+from .ratelimit import maybe_add_rate_limit
 from .routes import router
 
 
@@ -86,6 +87,10 @@ app.add_middleware(
 
 # Opt-in bearer auth — only active if BUCK_API_AUTH_TOKEN is set in .env.
 maybe_add_auth(app, _SETTINGS.buck_api_auth_token or None)
+
+# Throttle the LLM-calling / training endpoints (BUCK_RATE_LIMIT_PER_MINUTE,
+# default 30/min per client IP; 0 disables).
+maybe_add_rate_limit(app, _SETTINGS.buck_rate_limit_per_minute)
 
 app.include_router(router)
 

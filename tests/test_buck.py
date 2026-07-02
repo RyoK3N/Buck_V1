@@ -260,10 +260,10 @@ class TestBuckBatchConcurrency:
         provider.get_news_data.return_value = None
 
         async def fake_predict(analysis_results, **kwargs):
-            # Forecast 'close' echoes the overall technical signal so the
+            # Forecast 'reasoning' echoes the moving-average signal so the
             # assertion below can tell which symbol's data actually drove
             # each result.
-            signal = analysis_results[0]["data"]["summary"]["overall_signal"]
+            signal = analysis_results[0]["data"]["tools_results"]["moving_average"]["signal"]
             return Forecast(
                 date="2024-06-10", open=100.0, high=105.0, low=95.0,
                 close=111.0 if signal == "BUY" else 99.0 if signal == "SELL" else 100.0,
@@ -289,10 +289,24 @@ class TestBuckBatchConcurrency:
         )
 
         assert result["summary"]["successful"] == 4
+        # Assert on the moving-average tool, not the aggregated overall_signal:
+        # the aggregate blends contrarian indicators (RSI reads a steady
+        # downtrend as oversold → BUY) and the LSTM's learned output, so it is
+        # legitimately allowed to disagree with the trend. The MA crossover is
+        # a pure, deterministic function of the input series — on a monotone
+        # trend it must match the trend's direction, so any mismatch here can
+        # only mean the analysis ran against another symbol's DataFrame.
         for symbol, analysis in result["results"].items():
             expected_signal = "BUY" if symbol.startswith("UP") else "SELL"
-            actual_signal = analysis["analysis_results"][0]["data"]["summary"]["overall_signal"]
-            assert actual_signal == expected_signal, (
-                f"{symbol} (expected {expected_signal}) got {actual_signal} — "
+            tools_results = analysis["analysis_results"][0]["data"]["tools_results"]
+            ma = tools_results["moving_average"]
+            assert ma["signal"] == expected_signal, (
+                f"{symbol} (expected {expected_signal}) got {ma['signal']} — "
                 "cross-symbol data contamination in concurrent batch_analyze"
             )
+            # Same check from the raw metrics: short MA above long MA iff the
+            # series trends up.
+            if symbol.startswith("UP"):
+                assert ma["short_ma"] > ma["long_ma"]
+            else:
+                assert ma["short_ma"] < ma["long_ma"]
