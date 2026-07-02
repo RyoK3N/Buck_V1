@@ -59,6 +59,9 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<AnalyzeResponse | BatchResponse | null>(null)
   const [selectedTools, setSelectedTools] = useState<string[]>([])
+  // Whether the server itself has keys configured (from .env) — lets the
+  // analysis forms allow submission even when the key fields are blank.
+  const [serverKeyStatus, setServerKeyStatus] = useState({ openai: false, indian: false })
 
   // If a deep link targeted a tab, reflect it in the document title briefly.
   useEffect(() => {
@@ -69,6 +72,10 @@ export default function App() {
 
   const handleConfigChange = useCallback((cfg: Config) => setConfig(cfg), [])
   const handleToolsChange = useCallback((tools: string[]) => setSelectedTools(tools), [])
+  const handleServerKeyStatus = useCallback(
+    (status: { openai: boolean; indian: boolean }) => setServerKeyStatus(status),
+    [],
+  )
 
   async function handleSingleSubmit(payload: {
     symbol: string
@@ -155,7 +162,7 @@ export default function App() {
       <div className="mx-auto flex max-w-screen-xl gap-6 p-6">
         {/* Sidebar */}
         <div className="w-64 flex-shrink-0">
-          <ConfigPanel onChange={handleConfigChange} />
+          <ConfigPanel onChange={handleConfigChange} onServerKeyStatus={handleServerKeyStatus} />
         </div>
 
         {/* Main */}
@@ -211,9 +218,17 @@ export default function App() {
             <>
               <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm space-y-4">
                 {tab === 'single' ? (
-                  <AnalysisForm config={config} onSubmit={handleSingleSubmit} loading={loading} />
+                  <AnalysisForm
+                    onSubmit={handleSingleSubmit}
+                    loading={loading}
+                    openaiKeyAvailable={Boolean(config.openai_api_key) || serverKeyStatus.openai}
+                  />
                 ) : (
-                  <BatchForm config={config} onSubmit={handleBatchSubmit} loading={loading} />
+                  <BatchForm
+                    onSubmit={handleBatchSubmit}
+                    loading={loading}
+                    openaiKeyAvailable={Boolean(config.openai_api_key) || serverKeyStatus.openai}
+                  />
                 )}
                 <ToolsConfigPanel onChange={handleToolsChange} />
               </div>
@@ -232,6 +247,14 @@ export default function App() {
           )}
         </div>
       </div>
+
+      <footer className="border-t border-gray-200 bg-white px-6 py-4 text-center text-xs text-gray-500">
+        Buck's forecasts combine technical indicators, an LSTM, optional RL models, and an
+        LLM's reasoning over that evidence — none of it is backtested or validated against
+        held-out accuracy before being shown here. This is <strong>not financial advice</strong>;
+        confidence scores measure signal agreement, not predictive accuracy. Do not make
+        investment decisions based solely on this output.
+      </footer>
     </div>
   )
 }

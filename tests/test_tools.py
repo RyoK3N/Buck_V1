@@ -63,14 +63,45 @@ class TestStockDataContext:
         assert retrieved is not None
         pd.testing.assert_frame_equal(retrieved, sample_ohlcv_df)
 
-    def test_get_returns_none_initially(self):
-        import agent_scripts.tools as tools_mod
-        old = tools_mod._stock_data
-        try:
-            tools_mod._stock_data = None
-            assert get_stock_data() is None
-        finally:
-            tools_mod._stock_data = old
+    def test_get_returns_none_in_fresh_context(self):
+        # The context is a ContextVar: a new thread starts with an empty
+        # context, so it must see the default (None) — not whatever another
+        # thread set.
+        import threading
+
+        seen: dict = {}
+        t = threading.Thread(target=lambda: seen.setdefault("value", get_stock_data()))
+        t.start()
+        t.join()
+        assert seen["value"] is None
+
+    def test_contexts_are_isolated_across_threads(self, sample_ohlcv_df):
+        # Two threads set different DataFrames concurrently; each must read
+        # back its own. With a plain module global (the old implementation)
+        # the last writer would win in both threads.
+        import threading
+
+        df_a = sample_ohlcv_df
+        df_b = sample_ohlcv_df * 2.0
+        barrier = threading.Barrier(2)
+        results: dict = {}
+
+        def worker(name, df):
+            set_stock_data(df)
+            barrier.wait()  # both threads have written before either reads
+            results[name] = get_stock_data()
+
+        threads = [
+            threading.Thread(target=worker, args=("a", df_a)),
+            threading.Thread(target=worker, args=("b", df_b)),
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        pd.testing.assert_frame_equal(results["a"], df_a)
+        pd.testing.assert_frame_equal(results["b"], df_b)
 
 
 # ---------------------------------------------------------------------------

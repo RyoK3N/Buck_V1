@@ -43,6 +43,23 @@ def _record_call(name: str, ok: bool, latency_ms: float, error: Optional[str] = 
 # session Claude drives is the same one shown in the UI — they're separate
 # processes. The base URL comes from BUCK_API_URL (default http://localhost:8000).
 
+def _safe_base_url(candidate: Optional[str], default: str) -> str:
+    """Validate a configured base URL before using it for outbound requests
+    or browser opens. Only http(s) is accepted — anything else (a malformed
+    value, or a scheme like `file://`/`javascript:` that could come from a
+    tampered .env or a merged-in MCP client config) falls back to `default`
+    rather than being handed to requests/webbrowser.open verbatim.
+    """
+    from urllib.parse import urlparse
+
+    if not candidate:
+        return default.rstrip("/")
+    parsed = urlparse(candidate)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return default.rstrip("/")
+    return candidate.rstrip("/")
+
+
 def _api_base() -> str:
     base = os.environ.get("BUCK_API_URL")
     if not base:
@@ -51,7 +68,7 @@ def _api_base() -> str:
             base = getattr(SETTINGS, "buck_api_url", "http://localhost:8000")
         except Exception:
             base = "http://localhost:8000"
-    return base.rstrip("/")
+    return _safe_base_url(base, "http://localhost:8000")
 
 
 def _ui_base() -> str:
@@ -62,7 +79,7 @@ def _ui_base() -> str:
             base = getattr(SETTINGS, "buck_ui_url", "http://localhost:5173")
         except Exception:
             base = "http://localhost:5173"
-    return base.rstrip("/")
+    return _safe_base_url(base, "http://localhost:5173")
 
 
 class BuckAppUnavailable(RuntimeError):
@@ -663,7 +680,8 @@ async def open_buck_ui(
     except BuckAppUnavailable as exc:
         app = {"healthy": False, "error": str(exc)}
 
-    params: Dict[str, Any] = {"tab": tab}
+    _VALID_TABS = {"single", "batch", "visualizer", "rl", "realtime", "training", "claude"}
+    params: Dict[str, Any] = {"tab": tab if tab in _VALID_TABS else "realtime"}
     if symbol:
         params["symbol"] = symbol
     if autostart:

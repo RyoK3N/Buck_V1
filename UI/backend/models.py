@@ -16,7 +16,10 @@ class AnalyzeRequest(BaseModel):
     start_date: str = Field(..., description="YYYY-MM-DD")
     end_date: str = Field(..., description="YYYY-MM-DD")
     interval: str = "1h"
-    openai_api_key: str
+    # Optional: falls back to the server's own OPENAI_API_KEY (from .env) when
+    # omitted, so the browser never needs to round-trip a server-configured
+    # secret. Only set this to use a *different* key than the server's.
+    openai_api_key: Optional[str] = None
     indian_api_key: Optional[str] = ""
     model: Optional[str] = "gpt-4o"
     base_url: Optional[str] = None
@@ -28,7 +31,7 @@ class BatchRequest(BaseModel):
     start_date: str = Field(..., description="YYYY-MM-DD")
     end_date: str = Field(..., description="YYYY-MM-DD")
     interval: str = "1h"
-    openai_api_key: str
+    openai_api_key: Optional[str] = None
     indian_api_key: Optional[str] = ""
     model: Optional[str] = "gpt-4o"
     base_url: Optional[str] = None
@@ -61,11 +64,13 @@ class ToolsResponse(BaseModel):
 
 
 class ConfigResponse(BaseModel):
-    """Current server configuration loaded from .env"""
-    openai_api_key: str
+    """Whether the server has each key configured (from .env). Never echoes
+    secret values to the client — the UI only needs to know whether it can
+    omit the field and let the server use its own key."""
+    openai_api_key_configured: bool
     openai_base_url: Optional[str]
     chat_model: str
-    indian_api_key: str
+    indian_api_key_configured: bool
 
 
 class ChartTypeInfo(BaseModel):
@@ -299,7 +304,7 @@ class ClaudePredictRequest(BaseModel):
     interval: str = "1h"
     anthropic_api_key: Optional[str] = None
     claude_model: Optional[str] = None
-    openai_api_key: str
+    openai_api_key: Optional[str] = None
     indian_api_key: Optional[str] = ""
     base_url: Optional[str] = None
     selected_tools: Optional[List[str]] = None

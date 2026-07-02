@@ -161,7 +161,14 @@ class RLAgentTool(BaseTool):
                 elif action == 2 and position == 1:
                     wallet.sell(price)
                 current_pv = wallet.get_portfolio_value(price)
-                reward = current_pv - prev_pv
+                # Reward is the per-step return in percent of starting capital,
+                # not raw dollar P&L — a dollar reward scales with whatever
+                # initial_capital the caller picked, so a policy trained at one
+                # account size sees a completely different reward magnitude at
+                # another. Percent units keep the signal scale-invariant (and
+                # large enough for stable gradients); an episode's total reward
+                # is then simply its return in %.
+                reward = (current_pv - prev_pv) / initial_capital * 100.0
                 next_pos = 1 if wallet.holdings > 1e-6 else 0
                 next_cr = wallet.cash / (current_pv + 1e-10)
                 next_state = extract_state(data, min(step + 1, total_steps - 1), next_pos, next_cr)

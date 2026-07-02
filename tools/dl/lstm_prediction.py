@@ -1,7 +1,11 @@
 """PyTorch LSTM price-direction prediction tool."""
 
 from __future__ import annotations
+import hashlib
 import json
+import os
+import threading
+from pathlib import Path
 from typing import Any, Dict, Tuple
 
 import numpy as np
@@ -11,6 +15,34 @@ import torch.nn as nn
 from langchain_core.tools import tool
 
 from agent_scripts.tools import BaseTool, get_stock_data
+
+# ── Checkpoint cache ─────────────────────────────────────────────────────────
+# Without this, every single call retrains an LSTM from scratch on data that's
+# often identical to the previous call (same symbol/window requested again,
+# or a batch run touching the same symbol from multiple tools). Cache the
+# trained weights + normalization stats keyed by a fingerprint of the input
+# data and hyperparameters — same data + same hyperparams reuses the
+# checkpoint instead of paying for a fresh training run.
+WEIGHTS_DIR = Path(__file__).resolve().parent / "lstm_weights"
+WEIGHTS_DIR.mkdir(exist_ok=True)
+_MAX_CACHED_CHECKPOINTS = 200  # simple LRU-by-mtime cap on cache directory size
+
+
+def _prune_checkpoint_cache() -> None:
+    files = sorted(WEIGHTS_DIR.glob("*.pt"), key=lambda p: p.stat().st_mtime)
+    excess = len(files) - _MAX_CACHED_CHECKPOINTS
+    for path in files[:max(excess, 0)]:
+        path.unlink(missing_ok=True)
+
+
+def _atomic_save(obj: Dict[str, Any], path: Path) -> None:
+    """Write via a unique temp file + os.replace so a concurrent reader in
+    another thread (Buck.batch_analyze runs each symbol's analysis in a real
+    OS thread) never observes a partially-written checkpoint — os.replace is
+    atomic on the same filesystem, unlike writing straight to `path`."""
+    tmp_path = path.with_name(f"{path.stem}.{os.getpid()}-{threading.get_ident()}.tmp")
+    torch.save(obj, tmp_path)
+    os.replace(tmp_path, path)
 
 
 # ── LSTM network ─────────────────────────────────────────────────────────────
@@ -90,6 +122,22 @@ class LSTMPredictionTool(BaseTool):
             ys.append(y[i])
         return np.array(Xs), np.array(ys)
 
+    @staticmethod
+    def _fingerprint(data: pd.DataFrame, hyperparams: Dict[str, Any]) -> str:
+        """Identify "the same training problem" without needing the caller to
+        pass a symbol — execute() only receives the price DataFrame. Hashes
+        the data's shape/index range/closing prices plus hyperparameters, so
+        an identical (data, hyperparams) pair reuses a checkpoint and any
+        change to either invalidates it."""
+        close = data['Close'].to_numpy(dtype=np.float64, copy=False)
+        h = hashlib.sha256()
+        h.update(str(hyperparams).encode())
+        h.update(str(len(data)).encode())
+        h.update(str(data.index[0]).encode() if len(data) else b"")
+        h.update(str(data.index[-1]).encode() if len(data) else b"")
+        h.update(close.round(6).tobytes())
+        return h.hexdigest()[:32]
+
     def execute(self, data: pd.DataFrame, **kwargs) -> Dict[str, Any]:
         if not self._validate_data(data):
             raise ValueError("Invalid data structure")
@@ -124,31 +172,57 @@ class LSTMPredictionTool(BaseTool):
         X_train, X_val = X_seq[:split], X_seq[split:]
         y_train, y_val = y_seq[:split], y_seq[split:]
 
-        X_train_t = torch.tensor(X_train, dtype=torch.float32, device=device)
-        y_train_t = torch.tensor(y_train, dtype=torch.float32, device=device)
-        X_val_t = torch.tensor(X_val, dtype=torch.float32, device=device)
-
         n_features = X_train.shape[2]
+        hyperparams = {
+            'lookback': lookback, 'seq_len': seq_len, 'hidden_size': hidden_size,
+            'num_layers': num_layers, 'epochs': epochs, 'lr': lr, 'n_features': n_features,
+        }
+        ckpt_path = WEIGHTS_DIR / f"{self._fingerprint(data, hyperparams)}.pt"
 
         model = _LSTMNet(input_size=n_features, hidden_size=hidden_size, num_layers=num_layers).to(device)
-        criterion = nn.BCEWithLogitsLoss()
-        optimiser = torch.optim.Adam(model.parameters(), lr=lr)
+        cached = False
+        if ckpt_path.exists():
+            try:
+                checkpoint = torch.load(ckpt_path, map_location=device, weights_only=True)
+                model.load_state_dict(checkpoint['state_dict'])
+                accuracy = checkpoint['accuracy']
+                ckpt_path.touch()  # bump mtime for the LRU prune
+                cached = True
+            except Exception:
+                # Another concurrent call may have pruned/replaced this
+                # checkpoint between the exists() check and the load, or an
+                # older checkpoint predates this cache format — fall
+                # through and train fresh rather than failing the request.
+                cached = False
 
-        model.train()
-        for _ in range(epochs):
-            optimiser.zero_grad()
-            logits = model(X_train_t)
-            loss = criterion(logits, y_train_t)
-            loss.backward()
-            optimiser.step()
+        if not cached:
+            X_train_t = torch.tensor(X_train, dtype=torch.float32, device=device)
+            y_train_t = torch.tensor(y_train, dtype=torch.float32, device=device)
+            X_val_t = torch.tensor(X_val, dtype=torch.float32, device=device)
+
+            criterion = nn.BCEWithLogitsLoss()
+            optimiser = torch.optim.Adam(model.parameters(), lr=lr)
+
+            model.train()
+            for _ in range(epochs):
+                optimiser.zero_grad()
+                logits = model(X_train_t)
+                loss = criterion(logits, y_train_t)
+                loss.backward()
+                optimiser.step()
+
+            model.eval()
+            with torch.no_grad():
+                val_logits = model(X_val_t)
+                val_probs = torch.sigmoid(val_logits).cpu().numpy()
+                val_preds = (val_probs > 0.5).astype(int)
+                accuracy = float(np.mean(val_preds == y_val)) if len(y_val) > 0 else 0.0
+
+            _atomic_save({'state_dict': model.state_dict(), 'accuracy': accuracy}, ckpt_path)
+            _prune_checkpoint_cache()
 
         model.eval()
         with torch.no_grad():
-            val_logits = model(X_val_t)
-            val_probs = torch.sigmoid(val_logits).cpu().numpy()
-            val_preds = (val_probs > 0.5).astype(int)
-            accuracy = float(np.mean(val_preds == y_val)) if len(y_val) > 0 else 0.0
-
             latest = torch.tensor(X_seq[-1:], dtype=torch.float32, device=device)
             prob_up = float(torch.sigmoid(model(latest)).cpu().item())
 
@@ -173,6 +247,7 @@ class LSTMPredictionTool(BaseTool):
             'lookback': lookback,
             'seq_len': seq_len,
             'epochs': epochs,
+            'from_cache': cached,
         }
 
 

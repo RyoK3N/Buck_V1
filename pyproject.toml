@@ -1,3 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "buck"
+version = "1.4.1"
+description = "Agentic stock analysis and next-day OHLC forecasting (technical indicators + LSTM + RL + LLM)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[tool.setuptools]
+# Explicit list: the repo root also holds non-package dirs (UI/frontend,
+# inputs/, output/, docs/) that auto-discovery would otherwise trip over.
+packages = [
+    "agent_scripts",
+    "accuracy",
+    "realtime",
+    "mcp_server",
+]
+
 [tool.pytest.ini_options]
 markers = [
     "network: tests that require network access (deselect with '-m \"not network\"')",

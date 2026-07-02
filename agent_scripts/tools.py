@@ -8,6 +8,7 @@ auto-discovers LangChain @tool functions from the ``tools/`` directory.
 from __future__ import annotations
 import importlib.util
 from abc import ABC
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -20,19 +21,29 @@ from .config import LOGGER
 # ── Shared stock-data context ────────────────────────────────────────────────
 # Tools loaded from tools/ call get_stock_data() to access the DataFrame
 # that was set by the analyzer before tool invocation.
+#
+# A ContextVar (not a module-level global) so that concurrent callers are
+# isolated: each asyncio task and each thread sees only the DataFrame it set
+# itself. With a plain global, two overlapping requests for different symbols
+# (batch analysis, or an LLM agent driving @tool calls) could silently read
+# each other's data. The setter/getter must be called from the same task or
+# thread — which is how every existing call path already behaves.
 
-_stock_data: Optional[pd.DataFrame] = None
+_stock_data: ContextVar[Optional[pd.DataFrame]] = ContextVar("buck_stock_data", default=None)
 
 
 def set_stock_data(data: pd.DataFrame) -> None:
-    """Store the current stock DataFrame so @tool functions can access it."""
-    global _stock_data
-    _stock_data = data
+    """Store the current stock DataFrame so @tool functions can access it.
+
+    Scoped to the calling asyncio task / thread via a ContextVar, so
+    concurrent analyses of different symbols cannot see each other's data.
+    """
+    _stock_data.set(data)
 
 
 def get_stock_data() -> Optional[pd.DataFrame]:
-    """Retrieve the current stock DataFrame (set by the analyzer)."""
-    return _stock_data
+    """Retrieve the stock DataFrame set by the current task/thread's analyzer."""
+    return _stock_data.get()
 
 
 # ── BaseTool ─────────────────────────────────────────────────────────────────

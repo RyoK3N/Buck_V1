@@ -45,7 +45,8 @@ Please include:
 
 - The FastAPI backend runs with CORS configured for `localhost` origins only. If you deploy to production, restrict CORS to your actual domain.
 - The backend accepts API keys in POST request bodies (for the UI to pass keys per-request). In production, use server-side environment variables instead of passing keys from the frontend.
-- There is no built-in authentication on the API endpoints. If you expose the backend to the internet, add an authentication layer (API key middleware, OAuth, etc.).
+- Authentication is opt-in: set `BUCK_API_AUTH_TOKEN` in `.env` to require `Authorization: Bearer <token>` on every endpoint (the `/accuracy/ws` WebSocket enforces the same token via header or `?token=` query param). Leave it unset only for localhost-only use.
+- The expensive endpoints (`/analyze`, `/batch`, `/claude/*`, `/rl/*`, `/mcp/invoke`) are rate-limited per client IP (`BUCK_RATE_LIMIT_PER_MINUTE`, default 30/min) so a single client can't run up unbounded LLM spend or training load.
 
 ### Dependencies
 
@@ -53,11 +54,17 @@ Please include:
 - The frontend uses npm packages — run `npm audit` in `UI/frontend/` to check for known issues.
 - PyTorch is included for the LSTM tool. It is a large dependency; if you don't need deep learning tools, you can remove it from `requirements.txt` (the maths tools will still work).
 
-### Data Handling
+### Data Handling & Retention
 
 - Stock data is fetched from Yahoo Finance and cached in-memory during a session. It is not persisted unless `save_results=True` is passed.
 - News data may be fetched from third-party APIs. We do not control the content or availability of these sources.
 - No user data is collected, stored, or transmitted to any service other than the configured LLM API.
+
+Retention policy for locally persisted data:
+
+- `inputs/` (debug prompt/JSON dumps) and `output/` (analysis results) are written for your own debugging and accumulate indefinitely — nothing prunes them automatically. Both are gitignored; delete their contents whenever you like, nothing in the app depends on them after the run that wrote them.
+- Fetched news content may reference named individuals and is subject to the originating API's terms. It is stored only on your machine, inside `inputs/` dumps and the prompt text persisted alongside results — do not redistribute those files (including by committing them) without checking the source API's redistribution terms.
+- `accuracy/buck_accuracy.db` keeps every recorded prediction and evaluation indefinitely so accuracy statistics stay meaningful. It contains symbols, forecast values, and tool names — no personal data or secrets. Delete the file to reset history.
 
 ### Tool Execution
 

@@ -1,4 +1,7 @@
-fastapi
-uvicorn[standard]
-python-dotenv
-plotly
+# Standalone backend-only install. Kept in sync with the pins in the repo
+# root requirements.txt (which is what `python main.py` actually installs
+# against) — update both together.
+fastapi>=0.138.2,<0.139
+uvicorn[standard]>=0.49.0,<0.50
+python-dotenv>=1.2.2,<2
+plotly>=6.8.0,<7

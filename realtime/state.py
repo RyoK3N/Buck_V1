@@ -46,44 +46,60 @@ class LiveSessionState:
         self.status: str = "starting"  # starting | running | waiting_market | stopped
         self.steps: Deque[Dict[str, Any]] = deque(maxlen=max_steps)
         self.updated_at = self.started_at
+        # Guards the multi-field mutations below: the simulator thread writes
+        # while MCP/REST readers snapshot concurrently, and without a lock a
+        # reader can observe a torn update (e.g. equity from step N with the
+        # pnl fields still from step N-1). RLock so status_dict() can be
+        # called while the lock is already held.
+        self._lock = threading.RLock()
 
     def record_step(self, step: Dict[str, Any]) -> None:
-        self.steps.append(step)
-        self.n_steps += 1
-        self.last_action = step.get("target_position")
-        self.last_signal = step.get("signal")
-        self.last_price = step.get("price")
-        if "equity" in step:
-            self.equity = step["equity"]
-            self.intraday_pnl = round(self.equity - self.capital, 2)
-            self.intraday_pnl_pct = round((self.equity / self.capital - 1.0) * 100.0, 4)
-        self.updated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        with self._lock:
+            self.steps.append(step)
+            self.n_steps += 1
+            self.last_action = step.get("target_position")
+            self.last_signal = step.get("signal")
+            self.last_price = step.get("price")
+            if "equity" in step:
+                self.equity = step["equity"]
+                self.intraday_pnl = round(self.equity - self.capital, 2)
+                self.intraday_pnl_pct = round((self.equity / self.capital - 1.0) * 100.0, 4)
+            self.updated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     def record_update(self, stats: Dict[str, float]) -> None:
-        self.n_updates += 1
-        self.last_update_stats = {k: round(float(v), 5) for k, v in stats.items()}
+        with self._lock:
+            self.n_updates += 1
+            self.last_update_stats = {k: round(float(v), 5) for k, v in stats.items()}
+
+    def snapshot_steps(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Consistent copy of the most recent steps (readers must not iterate
+        the live deque while the simulator thread appends to it)."""
+        with self._lock:
+            steps = list(self.steps)
+        return steps[-limit:]
 
     def status_dict(self) -> Dict[str, Any]:
-        return {
-            "symbol": self.symbol,
-            "model_id": self.model_id,
-            "exchange": self.exchange,
-            "replay": self.replay,
-            "status": self.status,
-            "market_open": self.market_open,
-            "started_at": self.started_at,
-            "updated_at": self.updated_at,
-            "capital": self.capital,
-            "equity": round(self.equity, 2),
-            "intraday_pnl": round(self.intraday_pnl, 2),
-            "intraday_pnl_pct": self.intraday_pnl_pct,
-            "last_action": self.last_action,
-            "last_signal": self.last_signal,
-            "last_price": self.last_price,
-            "n_steps": self.n_steps,
-            "n_updates": self.n_updates,
-            "last_update_stats": self.last_update_stats,
-        }
+        with self._lock:
+            return {
+                "symbol": self.symbol,
+                "model_id": self.model_id,
+                "exchange": self.exchange,
+                "replay": self.replay,
+                "status": self.status,
+                "market_open": self.market_open,
+                "started_at": self.started_at,
+                "updated_at": self.updated_at,
+                "capital": self.capital,
+                "equity": round(self.equity, 2),
+                "intraday_pnl": round(self.intraday_pnl, 2),
+                "intraday_pnl_pct": self.intraday_pnl_pct,
+                "last_action": self.last_action,
+                "last_signal": self.last_signal,
+                "last_price": self.last_price,
+                "n_steps": self.n_steps,
+                "n_updates": self.n_updates,
+                "last_update_stats": self.last_update_stats,
+            }
 
 
 def register_session(state: LiveSessionState) -> None:
@@ -113,5 +129,4 @@ def get_history(symbol: Optional[str] = None, limit: int = 50) -> List[Dict[str,
     state = _resolve(symbol)
     if state is None:
         return []
-    steps = list(state.steps)
-    return steps[-limit:]
+    return state.snapshot_steps(limit)
